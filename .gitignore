@@ -1,0 +1,9 @@
+out/
+__pycache__/
+.venv/
+.tools/
+web/node_modules/
+web/dist/
+*.tsbuildinfo
+*.sqlite
+.claude/

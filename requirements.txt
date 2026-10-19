@@ -1,0 +1,7 @@
+UnityPy==1.25.4
+numpy
+pandas
+scikit-learn
+scipy
+fastapi==0.143.3
+uvicorn==0.54.0
