@@ -3,11 +3,15 @@
     .venv/Scripts/python app.py                 # http://127.0.0.1:8765 (ouvre le navigateur)
     .venv/Scripts/python app.py --no-watch      # sans surveillance automatique
     .venv/Scripts/python app.py --port 9000 --no-browser
+    .venv/Scripts/pythonw app.py                # sans console : journal dans out/app.log, bouton Quit pour arrêter
+
+Si l'outil tourne déjà sur ce port, ouvre seulement le navigateur.
 
 L'interface doit avoir été construite une fois : cd web && npm install && npm run build
 """
 
 import argparse
+import socket
 import sys
 import threading
 import webbrowser
@@ -28,11 +32,21 @@ def main() -> None:
     parser.add_argument("--no-watch", action="store_true", help="ne pas surveiller les sauvegardes")
     parser.add_argument("--no-browser", action="store_true", help="ne pas ouvrir le navigateur")
     args = parser.parse_args()
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    url = f"http://127.0.0.1:{args.port}"
+    with socket.socket() as s:
+        if s.connect_ex(("127.0.0.1", args.port)) == 0:
+            if not args.no_browser:
+                webbrowser.open(url)
+            return
+    if sys.stdout is None:  # pythonw : pas de console
+        log = args.db.parent / "app.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(log, "a", encoding="utf-8", buffering=1)
+    else:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     if not WEB_DIST.exists():
         print("interface absente : cd web && npm install && npm run build (l'API reste disponible)")
-    url = f"http://127.0.0.1:{args.port}"
     if not args.no_browser:
         threading.Timer(1.5, webbrowser.open, (url,)).start()
     print(f"Big Ambitions Analytics : {url}")

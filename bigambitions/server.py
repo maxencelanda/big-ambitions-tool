@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import signal
 import subprocess
 import sys
 import threading
@@ -205,6 +206,12 @@ def create_app(db_path: Path = DEFAULT_DB, root: Path = SAVE_ROOT, watch: bool =
         else:
             threading.Thread(target=ingestor.stop_watch, daemon=True).start()
         return {"watching": request.enabled}
+
+    @app.post("/api/shutdown", status_code=202)
+    def shutdown():
+        # Arrêt propre d'uvicorn (comme Ctrl+C), après avoir répondu.
+        threading.Timer(0.3, signal.raise_signal, (signal.SIGINT,)).start()
+        return {"accepted": True}
 
     @app.get("/api/events")
     async def events():

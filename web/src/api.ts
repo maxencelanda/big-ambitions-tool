@@ -288,6 +288,7 @@ export const api = {
   refreshGamedata: () => request("/api/gamedata/refresh", { method: "POST" }),
   checkBiggerAmbitions: (refresh = false) =>
     request("/api/checks/biggerambitions", { method: "POST", body: JSON.stringify({ refresh }) }),
+  shutdown: () => request("/api/shutdown", { method: "POST" }),
   setWatch: (enabled: boolean) => request("/api/watch", { method: "POST", body: JSON.stringify({ enabled }) }),
 };
 

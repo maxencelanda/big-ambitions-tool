@@ -9,11 +9,17 @@ if ($Remove) {
     Write-Host "Removed $link"
     exit
 }
+$pythonw = Join-Path $PSScriptRoot ".venv\Scripts\pythonw.exe"
+if (-not (Test-Path $pythonw) -or -not (Test-Path (Join-Path $PSScriptRoot "web\dist\index.html"))) {
+    Write-Host "Run start.cmd once first (it installs Python packages and builds the interface)."
+    exit 1
+}
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($link)
-$s.TargetPath = Join-Path $PSScriptRoot "start.cmd"
+# pythonw: no console window. Stop the server with the Quit button; the log goes to outpp.log.
+$s.TargetPath = $pythonw
+$s.Arguments = "app.py"
 $s.WorkingDirectory = $PSScriptRoot
-$s.WindowStyle = 7  # minimized: the console only hosts the server
 $s.IconLocation = "$env:SystemRoot\System32\imageres.dll,144"
 $s.Description = "Big Ambitions save analytics (http://127.0.0.1:8765)"
 $s.Save()

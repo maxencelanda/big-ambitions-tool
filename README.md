@@ -8,8 +8,9 @@ Double-clic sur **`start.cmd`**. Au premier lancement, il crée `.venv`, extrait
 construit l'interface. Il ouvre ensuite http://127.0.0.1:8765, qui n'écoute qu'en local. S'il tourne déjà,
 il ouvre seulement le navigateur.
 
-Raccourci dans le menu Démarrer (une fois) : `powershell -ExecutionPolicy Bypass -File install_shortcut.ps1`
-(`-Remove` pour l'enlever).
+Raccourci dans le menu Démarrer, sans console (une fois, après un premier `start.cmd`) :
+`powershell -ExecutionPolicy Bypass -File install_shortcut.ps1` (`-Remove` pour l'enlever). Le bouton **Quit**
+du bandeau arrête le serveur ; le journal est dans `out/app.log`.
 
 - La surveillance des sauvegardes tourne dans le serveur. Le bandeau du haut indique la sauvegarde
   utilisée et contient les boutons **Sync now** (Maj+clic pour forcer), **Refresh game data**,

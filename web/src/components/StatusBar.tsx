@@ -82,6 +82,13 @@ export function StatusBar({ lastEvent }: { lastEvent: ServerEvent | null }) {
                 onClick={() => check.mutate()}>
           {running("check") ? "Checking…" : "Check biggerambitions"}
         </button>
+        <button className="btn" title="Stop the local server (relaunch it from the Start menu)"
+                onClick={() => {
+                  if (confirm("Stop Big Ambitions Analytics?"))
+                    api.shutdown().then(() => { document.body.innerHTML = "<p style='padding:24px'>Server stopped. You can close this tab.</p>"; });
+                }}>
+          Quit
+        </button>
       </div>
     </div>
   );
