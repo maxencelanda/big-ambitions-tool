@@ -16,7 +16,7 @@ if (-not (Test-Path $pythonw) -or -not (Test-Path (Join-Path $PSScriptRoot "web\
 }
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($link)
-# pythonw: no console window. Stop the server with the Quit button; the log goes to outpp.log.
+# pythonw: no console window. Stop the server with the Quit button; the log goes to out\app.log.
 $s.TargetPath = $pythonw
 $s.Arguments = "app.py"
 $s.WorkingDirectory = $PSScriptRoot
