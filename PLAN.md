@@ -170,6 +170,8 @@ biggerambitions ┘   (wrapper + cache)      ├─ current_*  dernière sauvega
      supprimer, quel gain hebdomadaire.
    Initialement prévu : règles qui croisent les sources, avec le gain estimé et les chiffres qui justifient chaque recommandation.
    Exemple : « Error Affairs : monopole retrouvé le jour X → le plafond est passé de A à B, tes ventes se font au prix monopole ; risque : le rival R revient dans le quartier ».
-7. **Segmentation statistique** (voir la section dédiée) : ACP + Ward, carte des commerces sur les deux premiers axes, profil de chaque groupe, actions déduites des écarts au groupe performant, historique des groupes.
+7. ✅ **Segmentation statistique** (terminée, voir la section dédiée) : ACP + Ward, carte des commerces sur les deux premiers axes, profil de chaque groupe, actions déduites des écarts au groupe performant, historique des groupes.
+   + Marketing (`marketing.py`) : promotion et clients reproduits pour chaque combinaison de campagnes ; carte
+     Marketing sur la fiche commerce et recommandations.
 
 Le service « référentiel » et le pilotage du sync font partie des phases 1 et 2.
