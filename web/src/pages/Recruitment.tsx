@@ -26,16 +26,67 @@ const pct = (v: number | null | undefined, digits = 1) => (v == null ? "—" : `
 const acceptAt = (mood: number) => (mood >= 50 ? 0.95 : mood >= 25 ? 0.975 : 0.99);
 const up = (v: number, step: number) => Math.ceil(Math.round((v / step) * 1e6) / 1e6) * step;
 
-/** Négociation d'un candidat : seuils exacts, options (rounds → salaire, satisfaction) et calculateur pour le jeu. */
+/** Humeur après une réponse du candidat, en fourchette : le jeu ne l'affiche pas, on la déduit de sa réaction. */
+function moodAfter(prev: number, next: number): [number, number] {
+  if (next < prev - 0.001) return [4, 6]; // contre-proposition : −4 à −6
+  if (Math.abs(next - prev) <= 0.001) return [10, 20]; // refus ferme : −10 à −20
+  return [25, 30]; // proposition relevée : −25 à −30
+}
+
+/** Suivi d'une négociation en cours : on saisit chaque contre-proposition, l'outil suit l'humeur et donne les offres. */
+function Tracker({ c, n, target }: { c: Candidate; n: number; target: number }) {
+  const start = c.negotiationMood ?? 100;
+  const [counters, setCounters] = useState<number[]>(c.negotiationPending ? [] : [c.asking ?? c.hourlyWage]);
+  const [input, setInput] = useState("");
+  let low = start, high = start;
+  for (let i = 1; i < counters.length; i++) {
+    const [a, b] = moodAfter(counters[i - 1], counters[i]);
+    low -= b; high -= a;
+  }
+  const rounds = counters.length - (c.negotiationPending ? 0 : 1);
+  const last = counters[counters.length - 1];
+  const sat = (m: number) => Math.min(100, 50 + (m - 100) / 2);
+  const close = last ? up(last * acceptAt(low), 0.01) + 0.01 : null;
+  const add = () => {
+    const v = Number(input.replace(",", "."));
+    if (v > 0) { setCounters([...counters, v]); setInput(""); }
+  };
+  const risky = low - 6 < 20;
+  return (
+    <div>
+      <h3>Live negotiation</h3>
+      <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
+        The game does not show their mood: type each counter-offer they send, the tool deduces it (−4 to −6 per counter, −10 to −20 if they hold firm).
+      </p>
+      <div className="controls">
+        <label>Their new counter $<input type="number" step="0.05" value={input} onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }} style={{ width: 90 }} /></label>
+        <button className="btn" onClick={add}>Add</button>
+        <button className="btn" disabled={counters.length <= (c.negotiationPending ? 0 : 1)} onClick={() => setCounters(counters.slice(0, -1))}>Undo</button>
+        <button className="btn" onClick={() => setCounters(c.negotiationPending ? [] : [c.asking ?? c.hourlyWage])}>Reset</button>
+      </div>
+      {counters.length > 0 && (
+        <p className="muted" style={{ fontSize: 12 }}>Their offers: {counters.map((v) => usd(v)).join(" → ")}</p>
+      )}
+      {last ? (
+        <ul className="script">
+          <li>Round {rounds} · mood {low === high ? low : `${low}–${high}`} · satisfaction if hired now{" "}
+            <b>{sat(low) === sat(high) ? sat(low).toFixed(0) : `${sat(low).toFixed(0)}–${sat(high).toFixed(0)}`}</b></li>
+          {!risky && rounds < target && <li>Keep negotiating: offer <b>{usd(up(last * n, 0.01) + 0.01)}</b> ({target - rounds} round{target - rounds > 1 ? "s" : ""} left in your plan)</li>}
+          <li>{rounds >= target || risky ? <b>Close now</b> : "To close now"}: offer <b>{usd(close)}</b> ({pct(acceptAt(low))} of {usd(last)})
+            {risky && <span className="neg"> — one more round could make them walk away</span>}</li>
+        </ul>
+      ) : <p className="muted">Type their current counter-offer.</p>}
+    </div>
+  );
+}
+
+/** Négociation d'un candidat : seuils exacts, options (rounds → salaire, satisfaction) et suivi en direct. */
 function Negotiation({ c }: { c: Candidate }) {
   const [rounds, setRounds] = useState(c.bestRounds ?? 0);
-  const [counter, setCounter] = useState("");
-  const [mood, setMood] = useState(String(c.negotiationMood ?? 100));
   const n = c.negotiateThreshold ?? 0.9;
   const option = c.negotiation.find((o) => o.rounds === rounds) ?? c.negotiation[0];
   const steps = option?.script ? option.script.split("; ").map((x) => x.split("→").map(Number)) : [];
-  const last = Number(counter.replace(",", "."));
-  const m = Number(mood);
   const startDays = (c.startDays ?? "").split(", ").filter(Boolean);
   const columns: Column<NegotiationOption>[] = [
     { key: "rounds", label: "Rounds", num: true, render: (o) => <>{o.rounds}{o.rounds === c.bestRounds ? <span className="tag"> max</span> : o.rounds === c.balancedRounds ? <span className="tag"> balanced</span> : null}</> },
@@ -80,19 +131,7 @@ function Negotiation({ c }: { c: Candidate }) {
           </ol>
           <p className="muted" style={{ fontSize: 12 }}>Counters are random (40–60 % of the way): compute each offer from their actual last counter.</p>
         </div>
-        <div>
-          <h3>Calculator</h3>
-          <div className="controls">
-            <label>Their last counter $<input type="number" step="0.05" value={counter} onChange={(e) => setCounter(e.target.value)} style={{ width: 90 }} /></label>
-            <label>Mood % <input type="number" value={mood} onChange={(e) => setMood(e.target.value)} style={{ width: 60 }} /></label>
-          </div>
-          {last > 0 ? (
-            <ul className="script">
-              <li>To keep negotiating: offer <b>{usd(up(last * n, 0.01) + 0.01)}</b></li>
-              <li>To close now: offer <b>{usd(up(last * acceptAt(m), 0.01) + 0.01)}</b>{m < 30 && <span className="neg"> — mood low: close now</span>}</li>
-            </ul>
-          ) : <p className="muted">Type their last counter-offer.</p>}
-        </div>
+        <Tracker c={c} n={n} target={rounds} />
       </div>
     </div>
   );
