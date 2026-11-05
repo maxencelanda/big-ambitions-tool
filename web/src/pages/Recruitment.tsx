@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, Candidate, StaffMember } from "../api";
+import { api, Candidate, NegotiationOption, StaffMember } from "../api";
 import { businessLink } from "../components/BusinessTables";
 import { Column, SortableTable } from "../components/SortableTable";
 import { percent } from "../format";
@@ -22,6 +22,82 @@ function Cap({ cap }: { cap: number | null | undefined }) {
   return <span className={cap < 100 ? "neg" : undefined}>{cap}</span>;
 }
 
+const pct = (v: number | null | undefined, digits = 1) => (v == null ? "—" : `${(v * 100).toFixed(digits)} %`);
+const acceptAt = (mood: number) => (mood >= 50 ? 0.95 : mood >= 25 ? 0.975 : 0.99);
+const up = (v: number, step: number) => Math.ceil(Math.round((v / step) * 1e6) / 1e6) * step;
+
+/** Négociation d'un candidat : seuils exacts, options (rounds → salaire, satisfaction) et calculateur pour le jeu. */
+function Negotiation({ c }: { c: Candidate }) {
+  const [rounds, setRounds] = useState(c.bestRounds ?? 0);
+  const [counter, setCounter] = useState("");
+  const [mood, setMood] = useState(String(c.negotiationMood ?? 100));
+  const n = c.negotiateThreshold ?? 0.9;
+  const option = c.negotiation.find((o) => o.rounds === rounds) ?? c.negotiation[0];
+  const steps = option?.script ? option.script.split("; ").map((x) => x.split("→").map(Number)) : [];
+  const last = Number(counter.replace(",", "."));
+  const m = Number(mood);
+  const startDays = (c.startDays ?? "").split(", ").filter(Boolean);
+  const columns: Column<NegotiationOption>[] = [
+    { key: "rounds", label: "Rounds", num: true, render: (o) => <>{o.rounds}{o.rounds === c.bestRounds ? <span className="tag"> max</span> : o.rounds === c.balancedRounds ? <span className="tag"> balanced</span> : null}</> },
+    { key: "final", label: "Wage you get", num: true, title: "Expected (cautious: slowest counter-offers, biggest mood drops)",
+      render: (o) => <><b>{usd(o.final)}</b> <span className="muted">({usd(o.finalCautious)})</span></> },
+    { key: "saving", label: "Saved/h", num: true, value: (o) => (c.asking ?? 0) - o.final, render: (o) => usd((c.asking ?? 0) - o.final) },
+    { key: "savingPerWeek", label: "Saved/week", num: true, title: "At 40 h a week", render: (o) => `$${o.savingPerWeek.toFixed(0)}` },
+    { key: "mood", label: "Mood left", num: true, render: (o) => <>{o.mood} <span className="muted">({o.moodCautious})</span></> },
+    { key: "satisfaction", label: "Satisfaction at hire", num: true, title: "50 + (mood − 100) / 2, then up to +0.6 per hour worked towards their cap",
+      render: (o) => <>{o.satisfaction.toFixed(0)} <span className="muted">({o.satisfactionCautious.toFixed(0)})</span></> },
+  ];
+  return (
+    <div className="card section">
+      <h2>Negotiate with {c.name}</h2>
+      <p className="hint">
+        Thresholds are drawn when the negotiation starts, from the candidate and the day: the tool reproduces the game's draw exactly.
+        Offers from <b>{pct(n)}</b> of their last counter get a counter-offer about halfway (−4 to −6 mood each);
+        between {pct(c.firmThreshold)} and {pct(n)} they hold firm (−10 to −20 mood); below {pct(c.firmThreshold)} they raise their price.
+        They accept 95 % of their last counter while mood ≥ 50 (97.5 % from 25, 99 % below), and walk away under 20.
+        No signing bonus: they count it over 1,920 hours.
+      </p>
+      <div className="mk-lines">
+        {c.negotiationPending
+          ? <div><span className="muted">In progress</span> negotiation already started: thresholds are fixed, mood {c.negotiationMood}.</div>
+          : <div><span className="muted">When</span> start on <b>day {c.negotiationStartDay}</b>
+              {startDays.length > 1 && <span className="muted"> (threshold by start day: {startDays.join(" · ")})</span>}</div>}
+        <div><span className="muted">Asking</span> {usd(c.asking)}/h · <span className="muted">max saving</span> <b>{usd(c.bestWage)}</b> after {c.bestRounds} rounds
+          (satisfaction at hire ≈{c.bestSatisfaction?.toFixed(0)}) · <span className="muted">balanced</span> {usd(c.balancedWage)} after {c.balancedRounds} rounds (≈{c.balancedSatisfaction?.toFixed(0)})</div>
+      </div>
+      <SortableTable rows={c.negotiation} columns={columns} rowKey={(o) => String(o.rounds)} initialSort="rounds" initialDesc={false} maxHeight={260} />
+      <div className="grid two section">
+        <div>
+          <h3>Script for{" "}
+            <select value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
+              {c.negotiation.map((o) => <option key={o.rounds} value={o.rounds}>{o.rounds}</option>)}
+            </select> round(s)</h3>
+          <ol className="script">
+            {steps.map(([offer, next], i) => (
+              <li key={i}>Offer <b>{usd(offer)}</b> ({pct(n)} of {usd(i === 0 ? c.asking : steps[i - 1][1])}) → they counter ≈ {usd(next)}</li>
+            ))}
+            <li>Offer <b>{usd(option?.final)}</b> ({pct(acceptAt(option?.mood ?? 100))} of their last counter): <b>accepted</b>.</li>
+          </ol>
+          <p className="muted" style={{ fontSize: 12 }}>Counters are random (40–60 % of the way): compute each offer from their actual last counter.</p>
+        </div>
+        <div>
+          <h3>Calculator</h3>
+          <div className="controls">
+            <label>Their last counter $<input type="number" step="0.05" value={counter} onChange={(e) => setCounter(e.target.value)} style={{ width: 90 }} /></label>
+            <label>Mood % <input type="number" value={mood} onChange={(e) => setMood(e.target.value)} style={{ width: 60 }} /></label>
+          </div>
+          {last > 0 ? (
+            <ul className="script">
+              <li>To keep negotiating: offer <b>{usd(up(last * n, 0.01) + 0.01)}</b></li>
+              <li>To close now: offer <b>{usd(up(last * acceptAt(m), 0.01) + 0.01)}</b>{m < 30 && <span className="neg"> — mood low: close now</span>}</li>
+            </ul>
+          ) : <p className="muted">Type their last counter-offer.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Candidates({ candidates }: { candidates: Candidate[] }) {
   const skills = useMemo(() => [...new Set(candidates.map((c) => c.mainSkill))].sort(), [candidates]);
   const businesses = useMemo(() => [...new Set(candidates.flatMap((c) => c.fitsDetail.map((f) => f.business)))].sort(), [candidates]);
@@ -29,6 +105,8 @@ function Candidates({ candidates }: { candidates: Candidate[] }) {
   const [business, setBusiness] = useState("all");
   const [fullOnly, setFullOnly] = useState(false);
   const [minSkill, setMinSkill] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const chosen = candidates.find((c) => c.id === selected);
 
   // Pour un commerce choisi, on juge chaque candidat dans CE commerce ; sinon dans son meilleur commerce.
   const rows = candidates
@@ -42,9 +120,12 @@ function Candidates({ candidates }: { candidates: Candidate[] }) {
     .filter((c) => (skill === "all" || c.mainSkill === skill) && c.mainSkillValue >= minSkill && (!fullOnly || (c.bestCap ?? 100) >= 100));
 
   const columns: Column<Candidate>[] = [
-    { key: "name", label: "Candidate", render: (c) => <span title={`Skills: ${c.skills}\nDemands: ${c.demands}`}>{c.name}</span> },
+    { key: "name", label: "Candidate", render: (c) => (
+      <button className="linklike" title={`Skills: ${c.skills}\nDemands: ${c.demands}\nClick: negotiation plan`} onClick={() => setSelected(c.id)}>{c.name}</button>) },
     { key: "mainSkill", label: "Skill", render: (c) => <>{c.mainSkill} <b>{c.mainSkillValue.toFixed(0)}</b></> },
-    { key: "hourlyWage", label: "Wage/h", num: true, render: (c) => usd(c.hourlyWage), title: "Candidates ask exactly the market wage for their skill" },
+    { key: "hourlyWage", label: "Asks/h", num: true, render: (c) => usd(c.asking ?? c.hourlyWage), title: "Candidates ask the market wage for their skill (rounded up to 5 cents)" },
+    { key: "bestWage", label: "Negotiated/h", num: true, title: "Best wage with the negotiation plan (max saving); click for the script",
+      render: (c) => (c.bestWage != null ? <button className="linklike" onClick={() => setSelected(c.id)}>{usd(c.bestWage)}</button> : "—") },
     { key: "bestBusiness", label: business === "all" ? "Best fit" : "Business", render: (c) => (c.bestAddress
       ? <span title={c.fitsDetail.map((f) => `${f.business}: satisfaction ${f.cap ?? "—"}${f.missing ? ` — ${f.missing}` : ""}`).join("\n")}>
           {businessLink({ address: c.bestAddress, name: c.bestBusiness })}{c.fits > 1 && business === "all" ? <span className="muted"> +{c.fits - 1}</span> : null}</span>
@@ -86,6 +167,7 @@ function Candidates({ candidates }: { candidates: Candidate[] }) {
         <span className="muted">{rows.length} candidate(s)</span>
       </div>
       <SortableTable rows={rows} columns={columns} rowKey={(c) => c.id} initialSort="effectiveSkill" maxHeight={640} />
+      {chosen && <Negotiation key={chosen.id} c={chosen} />}
     </div>
   );
 }

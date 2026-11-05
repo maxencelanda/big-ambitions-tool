@@ -216,6 +216,15 @@ export type Candidate = {
   hoursUntilExpiring: number | null; fits: number; bestBusiness: string | null; bestAddress: string | null;
   bestCap: number | null; effectiveSkill: number | null; wagePerEffectivePoint: number | null; missingAtBest: string | null;
   fitsDetail: CandidateFit[];
+  asking?: number; negotiateThreshold?: number; firmThreshold?: number; todayNegotiateThreshold?: number;
+  negotiationStartDay?: number | null; negotiationPending?: number | boolean; negotiationMood?: number; startDays?: string;
+  bestRounds?: number; bestWage?: number; bestWageCautious?: number; bestSatisfaction?: number;
+  balancedRounds?: number; balancedWage?: number; balancedSatisfaction?: number;
+  negotiation: NegotiationOption[];
+};
+export type NegotiationOption = {
+  rounds: number; final: number; finalCautious: number; mood: number; moodCautious: number;
+  satisfaction: number; satisfactionCautious: number; savingPerWeek: number; script: string;
 };
 export type StaffMember = Employee & {
   business: string | null; address: string | null; segment: string | null; marketWage: number | null; wageRatio: number | null;

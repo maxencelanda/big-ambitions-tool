@@ -26,6 +26,10 @@ du bandeau arrête le serveur ; le journal est dans `out/app.log`.
 - Marketing : tables `marketing` (campagnes actuelles / idéales par commerce) et `marketing_options` (combinaison la
   moins chère pour chaque niveau de promotion), formules du jeu dans `bigambitions/marketing.py` ; carte Marketing de
   la fiche commerce et recommandations « Marketing ».
+- Négociation de salaire (`bigambitions/negotiation.py`, page Recruitment → clic sur un candidat) : seuils de la
+  négociation reproduits exactement (UnityEngine.Random + String.GetHashCode du jeu, 111/111 négociations de la
+  sauvegarde), meilleur jour pour commencer, salaire obtenu et satisfaction à l'embauche selon le nombre de rounds,
+  script d'offres et calculateur (table `negotiation_options`).
 - Horaires et effectifs (`bigambitions/planning.py`, page **Hours & staffing**) : pour chaque commerce, les horaires
   d'ouverture, les postes à occuper heure par heure et les campagnes qui maximisent le profit de la semaine, décidés
   ensemble (tables `plans`, `plan_days`, `plan_hours`). Le jeu arrondit les clients de chaque heure au supérieur : une

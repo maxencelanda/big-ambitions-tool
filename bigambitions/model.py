@@ -313,8 +313,44 @@ class Save:
                 "wagePerEffectivePoint": best["wagePerEffectivePoint"] if best else None,
                 "missingAtBest": best["missing"] if best else None,
             })
+            plan = self._negotiation_plans().get(e["id"])
+            if plan:
+                top = plan["options"][plan["bestRounds"]]
+                balanced = plan["options"][plan["balancedRounds"]]
+                row.update({
+                    "asking": plan["asking"], "negotiateThreshold": round(plan["negotiateThreshold"], 4),
+                    "firmThreshold": round(plan["firmThreshold"], 4),
+                    "todayNegotiateThreshold": round(plan["todayNegotiateThreshold"], 4),
+                    "negotiationStartDay": plan["startDay"], "negotiationPending": plan["pending"],
+                    "negotiationMood": plan["mood"],
+                    "startDays": ", ".join(f"{d['day']}: {d['negotiate'] * 100:.1f}%" for d in plan["days"]),
+                    "bestRounds": plan["bestRounds"], "bestWage": top["final"], "bestWageCautious": top["finalCautious"],
+                    "bestSatisfaction": top["satisfaction"],
+                    "balancedRounds": plan["balancedRounds"], "balancedWage": balanced["final"],
+                    "balancedSatisfaction": balanced["satisfaction"],
+                })
             rows.append(row)
         return rows
+
+    def _negotiation_plans(self) -> dict[str, dict]:
+        """Stratégie de négociation de salaire par candidat (voir negotiation.py), calculée une fois."""
+        if hasattr(self, "_negotiation_cache"):
+            return self._negotiation_cache
+        from . import negotiation
+
+        pending = negotiation.pending_negotiations(self.game)
+        day = self.game.get("Day") or 0
+        self._negotiation_cache = {
+            e["id"]: negotiation.plan(e["id"], e.get("hourlyWage") or 0, day,
+                                      (e.get("candidateInfo") or {}).get("hoursUntilExpiring"), pending.get(e["id"]))
+            for e in self.game.get("CandidateEmployeeInstances", []) if e.get("hourlyWage")
+        }
+        return self._negotiation_cache
+
+    def negotiation_options(self) -> list[Row]:
+        return [{"candidateId": cid, **{k: v for k, v in o.items() if k != "script"},
+                 "script": "; ".join(f"{s['offer']:.2f}→{s['counter']:.2f}" for s in o["script"])}
+                for cid, p in self._negotiation_plans().items() for o in p["options"]]
 
     def candidate_fits(self) -> list[Row]:
         """Chaque candidat face à chaque commerce qui emploie sa compétence principale."""
@@ -1114,6 +1150,7 @@ class Save:
             "candidate_fits": self.candidate_fits(),
             "employee_demands": self.employee_demands(),
             "salary_negotiations": self.salary_negotiations(),
+            "negotiation_options": self.negotiation_options(),
             "contacts": self.contacts(),
             "messages": self.messages(),
             "manager_plans": self.manager_plans(),

@@ -283,8 +283,13 @@ def recruitment(db: sqlite3.Connection) -> dict[str, Any]:
     by_candidate: dict[str, list[dict[str, Any]]] = {}
     for f in fits:
         by_candidate.setdefault(f["candidateId"], []).append(f)
+    options: dict[str, list[dict[str, Any]]] = {}
+    if "negotiation_options" in tables:
+        for o in _all(db, "SELECT * FROM negotiation_options ORDER BY rounds"):
+            options.setdefault(o["candidateId"], []).append(o)
     for c in candidates:
         c["fitsDetail"] = by_candidate.get(c["id"], [])
+        c["negotiation"] = options.get(c["id"], [])
 
     employees = _all(db, """SELECT e.*, b.segment FROM employees e LEFT JOIN businesses b ON b.address = e.address
                             WHERE e.status = 'active'""")
