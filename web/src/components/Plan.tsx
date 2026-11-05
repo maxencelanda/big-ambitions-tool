@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plan, PlanDay, PlanHour } from "../api";
-import { money } from "../format";
+import { money, percent } from "../format";
 import { baseOption, Chart, ThemeColors } from "./Chart";
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -31,7 +31,7 @@ export function PlanCard({ plan, days, hours, t }: { plan: Plan; days: PlanDay[]
   const label = STATION_LABEL[plan.stationKind] ?? "stations";
   const byHour = useMemo(() => {
     const cells = new Map(hours.filter((h) => h.day === day).map((h) => [h.hour, h]));
-    return Array.from({ length: 24 }, (_, hour) => cells.get(hour) ?? { day, hour, open: false, openNow: false, customers: 0, stations: 0, stationsNow: 0 });
+    return Array.from({ length: 24 }, (_, hour) => cells.get(hour) ?? { day, hour, open: false, openNow: false, efficiency: 0, customers: 0, stations: 0, stationsNow: 0 });
   }, [hours, day]);
   const option = useMemo(() => ({
     ...baseOption(t),
@@ -39,7 +39,7 @@ export function PlanCard({ plan, days, hours, t }: { plan: Plan; days: PlanDay[]
     grid: { ...baseOption(t).grid, top: 30 },
     tooltip: { ...baseOption(t).tooltip, trigger: "axis", formatter: (items: { dataIndex: number }[]) => {
       const h = byHour[items[0].dataIndex];
-      return `${h.hour}:00–${h.hour + 1}:00<br/>Now: ${h.openNow ? `open, ${h.stationsNow} staffed` : "closed"}`
+      return `${h.hour}:00–${h.hour + 1}:00 · efficiency ${percent(h.efficiency, 1)}<br/>Now: ${h.openNow ? `open, ${h.stationsNow} staffed` : "closed"}`
         + `<br/>Ideal: ${h.open ? `open, ${h.stations} staffed for ${h.customers.toFixed(1)} customers` : "closed"}`;
     } },
     xAxis: { type: "category", data: byHour.map((h) => `${h.hour}h`), axisTick: { show: false },
@@ -71,6 +71,16 @@ export function PlanCard({ plan, days, hours, t }: { plan: Plan; days: PlanDay[]
           at ≈{plan.weeklyHoursPerEmployee.toFixed(0)} h/week (12 h/day max)
           {plan.moreStationsExtra ? <> · {plan.moreStationsExtra} more {label} would add {money(plan.moreStationsGainPerDay)}/day</> : null}</div>
       </div>
+      {plan.breakEvenEfficiency != null && (
+        <p className="hint">
+          <b>An hour pays from {percent(plan.breakEvenEfficiency, 1)} efficiency</b> (day × hour factor of the business type, as on
+          biggerambitions).
+          {plan.firstCustomerEfficiency != null && plan.firstCustomerEfficiency >= plan.breakEvenEfficiency - 1e-9
+            ? <> From there the game rounds up to 1 customer ({money(plan.valuePerCustomer)}), more than one {label.replace(/s$/, "")}'s wage ({money(plan.stationWage)}/h).</>
+            : <> Below that, the few customers do not pay a {label.replace(/s$/, "")} ({money(plan.stationWage)}/h).</>}
+          {" "}Hover the chart for each hour's efficiency.
+        </p>
+      )}
       <div className="segmented" role="group" aria-label="Day" style={{ marginBottom: 8 }}>
         {WEEKDAYS.map((d, i) => <button key={d} className={i + 1 === day ? "on" : ""} onClick={() => setDay(i + 1)}>{d}</button>)}
       </div>

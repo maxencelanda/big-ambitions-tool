@@ -94,11 +94,19 @@ class Context:
         # Calcul en float32 comme le jeu : 13 + 95 × 0,7f donne 79,5 tout rond, arrondi à 80.
         return min(_round(f32(self.traffic + f32(self.marketing_points(reach) * self.strength))), 100)
 
+    def efficiency(self, day: int, hour: int) -> float:
+        """Multiplicateur jour × heure du type de commerce (l'« efficacité » de biggerambitions)."""
+        return _multiplier(self.days_mult, "day", day) * _multiplier(self.hours_mult, "hour", hour)
+
     def wanted(self, promotion: int, day: int, hour: int) -> tuple[int, int]:
         """Clients qui se présentent à cette heure, si le commerce est ouvert : (avec le plafond de capacité
         du commerce, sans). Les postes occupés ne sont pas appliqués ici."""
-        base = (self.initial * (self.base + 0.75 * promotion / 100) * _multiplier(self.days_mult, "day", day)
-                * _multiplier(self.hours_mult, "hour", hour))
+        return self.wanted_at(promotion, self.efficiency(day, hour))
+
+    def wanted_at(self, promotion: int, efficiency: float) -> tuple[int, int]:
+        """Comme ``wanted``, pour une efficacité donnée. Le jeu arrondit au supérieur (bureau : après −0,2) :
+        dès que l'efficacité dépasse un seuil très bas, l'heure amène au moins un client."""
+        base = self.initial * (self.base + 0.75 * promotion / 100) * efficiency
         if self.segment == "office":
             sat = (self.satisfaction - 50) / 100 + 1
             c = max(0, math.ceil(base * sat * (self.demand or 0) - 0.2))

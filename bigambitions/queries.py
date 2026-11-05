@@ -198,7 +198,7 @@ def business_detail(db: sqlite3.Connection, address: str, window: int = 7) -> di
                              (address,)) if "marketing_options" in tables else []
     plan = _one(db, "SELECT * FROM plans WHERE address = ?", (address,)) if "plans" in tables else None
     plan_days = _all(db, "SELECT * FROM plan_days WHERE address = ? ORDER BY day", (address,)) if "plan_days" in tables else []
-    plan_hours = _all(db, "SELECT day, hour, open, openNow, customers, stations, stationsNow FROM plan_hours "
+    plan_hours = _all(db, "SELECT day, hour, open, openNow, efficiency, customers, stations, stationsNow FROM plan_hours "
                           "WHERE address = ? ORDER BY day, hour", (address,)) if "plan_hours" in tables else []
     satisfaction = _all(db, """SELECT day, satisfaction, satCustomerService, satPricing, satCleanliness, satFacility
                                FROM hist_businesses WHERE address = ? ORDER BY day""", (address,)) if "hist_businesses" in tables else []

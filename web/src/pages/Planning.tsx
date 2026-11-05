@@ -3,7 +3,7 @@ import { api, Plan } from "../api";
 import { businessLink } from "../components/BusinessTables";
 import { idealHours, STATION_LABEL } from "../components/Plan";
 import { Column, SortableTable } from "../components/SortableTable";
-import { money } from "../format";
+import { money, percent } from "../format";
 
 /** « Mon–Fri 0–24 h · Sat–Sun 8–21 h » : jours consécutifs aux mêmes horaires regroupés. */
 function week(plan: Plan): string {
@@ -24,6 +24,8 @@ const columns: Column<Plan>[] = [
   { key: "hours", label: "Ideal opening hours", value: (p) => week(p), className: () => "wrap" },
   { key: "peakStations", label: "Peak staffed", num: true, render: (p) => `${p.peakStations} / ${p.stationsInstalled} ${STATION_LABEL[p.stationKind] ?? ""}`,
     title: "Stations staffed at the busiest hour / installed" },
+  { key: "breakEvenEfficiency", label: "Pays from", num: true, title: "Lowest efficiency (day × hour factor) at which an open hour pays its staff",
+    render: (p) => (p.breakEvenEfficiency != null ? percent(p.breakEvenEfficiency, 1) : "—") },
   { key: "employees", label: "Employees", num: true, title: "About, at the business's usual weekly hours" },
   { key: "campaigns", label: "Ideal marketing", className: () => "wrap", render: (p) => <>{p.campaigns} <span className="muted">({money(p.marketingCost)}/day)</span></> },
   { key: "gainPerDay", label: "Profit/day (model)", num: true, title: "Now → ideal, and the gain",

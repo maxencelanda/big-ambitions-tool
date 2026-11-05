@@ -103,6 +103,22 @@ def _hour(ctx: Context, biz: _Business, promotion: int, day: int, hour: int, cal
             "profit": served * value - stations * biz.wage}
 
 
+def _thresholds(ctx: Context, biz: _Business, promotion: int, calibration: float, value: float) -> dict[str, float | None]:
+    """Efficacité (jour × heure) à partir de laquelle une heure amène un client, puis à partir de laquelle elle paie
+    ses postes : on balaie l'efficacité par pas de 0,1 point avec la formule du jeu."""
+    first = pays = None
+    for step in range(1, 1501):
+        eff = step / 1000
+        customers = ctx.wanted_at(promotion, eff)[0] * calibration
+        if customers > 0 and first is None:
+            first = eff
+        stations = min(math.ceil(customers / biz.per_station - 1e-9), biz.installed) if customers > 0 else 0
+        if stations and min(customers, stations * biz.per_station) * value > stations * biz.wage:
+            pays = eff
+            break
+    return {"firstCustomerEfficiency": first, "breakEvenEfficiency": pays}
+
+
 def _plan(ctx: Context, biz: _Business, combo: tuple[int, ...], calibration: float, value: float,
           limit: int) -> dict[str, Any]:
     promotion = ctx.promotion(sum(CAMPAIGNS[i][2] for i in combo))
@@ -165,6 +181,7 @@ def analyse(reg: dict, ref, segment: str, game: dict, demand: float | None, mk: 
             now = len(biz.now.get((day, h), []))
             if cell or now or (day, h) in biz.open_now:
                 hours.append({"day": day, "hour": h, "open": cell is not None, "openNow": (day, h) in biz.open_now,
+                              "efficiency": round(ctx.efficiency(day, h), 4),
                               "customers": round(cell["customers"], 2) if cell else 0.0,
                               "stations": cell["stations"] if cell else 0, "stationsNow": now})
     days = []
@@ -193,5 +210,6 @@ def analyse(reg: dict, ref, segment: str, game: dict, demand: float | None, mk: 
         "gainPerDay": round((best["profitPerWeek"] - current["profitPerWeek"]) / 7, 2),
         "moreStations": {"peakStations": unlimited_peak, "extra": unlimited_peak - biz.installed,
                          "gainPerDay": round(more / 7, 2)} if more > 7 else None,
+        **_thresholds(ctx, biz, best["promotion"], calibration, value),
         "days": days, "hours": hours,
     }

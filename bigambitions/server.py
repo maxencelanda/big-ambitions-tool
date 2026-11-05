@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import signal
 import subprocess
 import sys
@@ -211,6 +212,8 @@ def create_app(db_path: Path = DEFAULT_DB, root: Path = SAVE_ROOT, watch: bool =
     def shutdown():
         # Arrêt propre d'uvicorn (comme Ctrl+C), après avoir répondu.
         threading.Timer(0.3, signal.raise_signal, (signal.SIGINT,)).start()
+        # Filet de sécurité : si l'arrêt propre bloque, le processus ne doit pas continuer à importer.
+        threading.Timer(8, os._exit, (0,)).start()
         return {"accepted": True}
 
     @app.get("/api/events")

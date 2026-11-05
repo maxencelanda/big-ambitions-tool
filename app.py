@@ -11,6 +11,7 @@ L'interface doit avoir été construite une fois : cd web && npm install && npm 
 """
 
 import argparse
+import os
 import socket
 import sys
 import threading
@@ -51,8 +52,11 @@ def main() -> None:
         threading.Timer(1.5, webbrowser.open, (url,)).start()
     print(f"Big Ambitions Analytics : {url}")
     # Écoute locale uniquement (127.0.0.1) : l'outil n'est pas exposé sur le réseau.
+    # Le flux /api/events d'un onglet ouvert ne se ferme jamais : sans délai, uvicorn attendrait indéfiniment et le
+    # processus (et sa surveillance des sauvegardes) survivrait à l'arrêt.
     uvicorn.run(create_app(args.db, args.root, watch=not args.no_watch), host="127.0.0.1", port=args.port,
-                log_level="warning")
+                log_level="warning", timeout_graceful_shutdown=3)
+    os._exit(0)  # threads encore bloqués sur le flux d'événements : ne pas les attendre
 
 
 if __name__ == "__main__":

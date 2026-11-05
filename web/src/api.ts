@@ -124,6 +124,7 @@ export type Plan = {
   currentCampaigns: string; currentMarketingCost: number; currentPromotion: number; currentProfitPerDay: number;
   currentCustomersPerDay: number; currentStationHoursPerWeek: number;
   moreStationsExtra: number | null; moreStationsGainPerDay: number | null; openingHours: string;
+  firstCustomerEfficiency: number | null; breakEvenEfficiency: number | null;
   days?: PlanDay[];
 };
 export type PlanDay = {
@@ -131,7 +132,7 @@ export type PlanDay = {
   stationHours: number; peakStations: number; shifts: string;
 };
 export type PlanHour = {
-  day: number; hour: number; open: number | boolean; openNow: number | boolean; customers: number;
+  day: number; hour: number; open: number | boolean; openNow: number | boolean; efficiency: number; customers: number;
   stations: number; stationsNow: number;
 };
 export type Staffing = {
