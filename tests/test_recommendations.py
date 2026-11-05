@@ -2,7 +2,7 @@ import sqlite3
 import unittest
 
 from bigambitions import db as database
-from bigambitions.recommendations import _ranges
+from bigambitions.recommendations import _active_days, _ranges
 
 
 class RangesTest(unittest.TestCase):
@@ -13,6 +13,16 @@ class RangesTest(unittest.TestCase):
     def test_days_are_separate(self):
         hours = [{"day": 1, "hour": 19, "idleStations": 1}, {"day": 2, "hour": 12, "idleStations": 1}]
         self.assertEqual(_ranges(hours), ["Mon 19–20 h: 1 fewer", "Tue 12–13 h: 1 fewer"])
+
+
+class ActiveDaysTest(unittest.TestCase):
+    def test_days_before_the_first_sale_are_not_counted(self):
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.execute("CREATE TABLE hist_daily_finances (day INTEGER, address TEXT, sales REAL)")
+        rows = [(d, "old", 100.0) for d in range(1, 11)] + [(d, "new", 0.0 if d < 9 else 100.0) for d in range(5, 11)]
+        db.executemany("INSERT INTO hist_daily_finances VALUES (?, ?, ?)", rows)
+        self.assertEqual(_active_days(db, 4, 10), {"old": 7, "new": 2})
 
 
 class DismissalsTest(unittest.TestCase):

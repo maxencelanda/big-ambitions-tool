@@ -41,6 +41,14 @@ def _reco(key, category, business, title, steps, why, gain, confidence, effort, 
             "evidence": evidence}
 
 
+def _active_days(db: sqlite3.Connection, first_day: int, last_day: int) -> dict[str, int]:
+    """Jours d'activité de chaque commerce dans la fenêtre, à partir de sa première vente : un commerce ouvert
+    pendant la fenêtre ne doit pas voir ses moyennes diluées par les jours où il n'existait pas."""
+    return {r["address"]: last_day - r["first"] + 1 for r in _all(db, """
+        SELECT address, max(?, min(day)) AS first FROM hist_daily_finances WHERE sales > 0 GROUP BY address""",
+        (first_day,))}
+
+
 class Data:
     def __init__(self, db: sqlite3.Connection, window: int):
         tables = _tables(db)
@@ -63,12 +71,13 @@ class Data:
         self.sales = market._sales_per_day(db, window) if "hist_sales" in tables else {}
         days = db.execute("SELECT count(DISTINCT day) FROM hist_sales WHERE day >= ?", (self.first_day,)).fetchone()[0] \
             if "hist_sales" in tables else 0
-        self.customers = {r["address"]: r["c"] / max(days, 1) for r in _all(db, """
+        self.days = _active_days(db, self.first_day, last)
+        self.customers = {r["address"]: r["c"] / max(min(days, self.days.get(r["address"], days)), 1) for r in _all(db, """
             SELECT address, sum(customers) AS c FROM (SELECT address, day, max(customers) AS customers
             FROM hist_sales WHERE day >= ? GROUP BY address, day) GROUP BY address""", (self.first_day,))} if days else {}
 
     def per_day(self, address: str, field: str) -> float:
-        return (self.pnl.get(address, {}).get(field) or 0) / self.window
+        return (self.pnl.get(address, {}).get(field) or 0) / max(self.days.get(address, self.window), 1)
 
 
 # --- prix ----------------------------------------------------------------------
