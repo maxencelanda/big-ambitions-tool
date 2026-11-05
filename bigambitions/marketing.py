@@ -94,29 +94,33 @@ class Context:
         # Calcul en float32 comme le jeu : 13 + 95 × 0,7f donne 79,5 tout rond, arrondi à 80.
         return min(_round(f32(self.traffic + f32(self.marketing_points(reach) * self.strength))), 100)
 
+    def wanted(self, promotion: int, day: int, hour: int) -> tuple[int, int]:
+        """Clients qui se présentent à cette heure, si le commerce est ouvert : (avec le plafond de capacité
+        du commerce, sans). Les postes occupés ne sont pas appliqués ici."""
+        base = (self.initial * (self.base + 0.75 * promotion / 100) * _multiplier(self.days_mult, "day", day)
+                * _multiplier(self.hours_mult, "hour", hour))
+        if self.segment == "office":
+            sat = (self.satisfaction - 50) / 100 + 1
+            c = max(0, math.ceil(base * sat * (self.demand or 0) - 0.2))
+            return c, c
+        return math.ceil(min(base, self.cap)), math.ceil(base)
+
     def weekly_customers(self, promotion: int) -> dict[str, float]:
         """Clients sur une semaine type ; ``uncapped`` : sans le plafond des bureaux occupés."""
-        m = self.base + 0.75 * promotion / 100
         served = uncapped = 0.0
         for day in self.schedule:
             if not day.get("isOpen"):
                 continue
-            dm = _multiplier(self.days_mult, "day", day["day"])
             hours = {h for slot in day.get("openingHourSlots") or [] for h in range(slot["startingHour"], slot["endingHour"])}
             for h in hours:
-                base = self.initial * m * dm * _multiplier(self.hours_mult, "hour", h)
+                capped, raw = self.wanted(promotion, day["day"], h)
                 if self.segment == "office":
-                    sat = (self.satisfaction - 50) / 100 + 1
-                    wanted = max(0, math.ceil(base * sat * (self.demand or 0) - 0.2))
-                    served += min(wanted, self.desks.get((day["day"], h), 0))
-                    uncapped += wanted
+                    served += min(capped, self.desks.get((day["day"], h), 0))
+                    uncapped += capped
                 else:
-                    c = math.ceil(min(base, self.cap))
                     # Postes de service (fauteuils, caisses) : au-delà de leur débit, les clients ne sont pas servis.
-                    if self.desks:
-                        c = min(c, self.desks.get((day["day"], h), 0))
-                    served += c
-                    uncapped += math.ceil(base)
+                    served += min(capped, self.desks.get((day["day"], h), 0)) if self.desks else capped
+                    uncapped += raw
         return {"served": served, "uncapped": uncapped}
 
 

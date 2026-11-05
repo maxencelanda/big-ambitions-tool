@@ -6,7 +6,7 @@ import { money } from "../format";
 import { WindowSelect } from "./Dashboard";
 
 const CATEGORY_LABEL: Record<string, string> = {
-  pricing: "Pricing", staffing: "Staffing", marketing: "Marketing", employees: "Employee demands", markets: "Number of businesses",
+  pricing: "Pricing", staffing: "Staffing", marketing: "Marketing", planning: "Hours & staffing", employees: "Employee demands", markets: "Number of businesses",
   stock: "Stock", competition: "Competition", expansion: "Expansion", profitability: "Profitability",
 };
 const CONFIDENCE_HELP: Record<string, string> = {

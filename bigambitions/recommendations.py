@@ -65,6 +65,8 @@ class Data:
         self.staffing = {s["address"]: s for s in _all(db, "SELECT * FROM staffing")} if "staffing" in tables else {}
         self.staffing_hours = _all(db, "SELECT * FROM staffing_hours ORDER BY day, hour") if "staffing_hours" in tables else []
         self.marketing = _all(db, "SELECT * FROM marketing") if "marketing" in tables else []
+        self.plans = _all(db, "SELECT * FROM plans") if "plans" in tables else []
+        self.plan_days = _all(db, "SELECT * FROM plan_days ORDER BY day") if "plan_days" in tables else []
         self.employees = _all(db, "SELECT * FROM employees WHERE status = 'active'") if "employees" in tables else []
         self.demands = _all(db, "SELECT * FROM employee_demands WHERE status = 'missing'") if "employee_demands" in tables else []
         self.market = {(r["item"], r["neighborhood"]): r for r in _all(db, "SELECT * FROM market_prices")} if "market_prices" in tables else {}
@@ -136,6 +138,46 @@ def idle_shifts(d: Data) -> list[dict]:
                          f"About {s['avgCustomersPerDay']:.0f} customers a day, each {label[:-1]} serves {s['customersPerStationHour']}/h: "
                          f"{s['idleStationHoursPerWeek']} of {s['staffedStationHoursPerWeek']} staffed hours a week are not needed.",
                          s["idleWagesPerWeek"] / 7, "high", "medium", idleShare=s["idleShare"]))
+    return out
+
+
+# --- plan idéal (marketing + horaires + postes) ----------------------------------------
+
+PLAN_MIN_GAIN = 50
+
+
+def ideal_plans(d: Data) -> list[dict]:
+    """Plan idéal de planning.py. Il englobe les créneaux inutiles et le marketing : ces recommandations-là sont
+    retirées pour les commerces qui en ont un (voir compute)."""
+    out = []
+    days = defaultdict(list)
+    for row in d.plan_days:
+        days[row["address"]].append(row)
+    for p in d.plans:
+        if (p["gainPerDay"] or 0) < PLAN_MIN_GAIN:
+            continue
+        b = d.businesses.get(p["address"], {"address": p["address"], "name": p["business"]})
+        label = {"desk": "desks", "hairdresserchair": "chairs", "checkoutcounter": "checkouts",
+                 "cashregister": "cash registers"}.get(p["stationKind"], "stations")
+        steps = []
+        if p["campaigns"] != p["currentCampaigns"]:
+            steps.append(f"Marketing: “{p['campaigns']}” (${p['marketingCost']:,.0f}/day, promotion {p['promotion']}) "
+                         f"instead of “{p['currentCampaigns']}”.")
+        for day in days[p["address"]]:
+            hours = f"{day['openFrom']}–{day['openTo']} h" if day["openFrom"] is not None else "closed"
+            steps.append(f"{day['label']}: open {hours}" + (f", staff {day['shifts']}" if day["shifts"] else "") + ".")
+        steps.append(f"About {p['employees']} employees on {label} ({p['stationHoursPerWeek']} {label[:-1]}-hours a week "
+                     f"at ≈{p['weeklyHoursPerEmployee']:.0f} h each), vs {p['currentStationHoursPerWeek']} now.")
+        office = b.get("segment") == "office" or p["stationKind"] == "desk"
+        why = (f"For each of the 64 campaign mixes, expected customers hour by hour (game formulas: the game rounds up, so even "
+               f"a quiet hour brings a customer), {label} needed at {p['customersPerStationHour']}/h each, and each day the "
+               f"run of hours whose margin (${p['valuePerCustomer']:,.0f}/customer) beats the wages (${p['stationWage']:,.0f}/h). "
+               f"Model: ${p['currentProfitPerDay']:,.0f}/day now → ${p['profitPerDay']:,.0f}/day, "
+               f"{p['currentCustomersPerDay']:.0f} → {p['customersPerDay']:.0f} customers/day. "
+               "Cleaning and employees' schedule demands are not modeled.")
+        out.append(_reco(f"plan|{p['address']}", "planning", b, "Adopt the ideal hours, staffing and marketing", steps, why,
+                         p["gainPerDay"], "medium" if office else "low", "medium",
+                         profitNow=p["currentProfitPerDay"], profitIdeal=p["profitPerDay"]))
     return out
 
 
@@ -390,7 +432,9 @@ def compute(db: sqlite3.Connection, window: int = 7, dismissed: set[str] | None 
     d = Data(db, window)
     if not d.ok:
         return []
-    items = (price_raises(d) + idle_shifts(d) + marketing_mix(d) + demand_fixes(d) + provider_counts(d) + monopoly_targets(d)
+    plans = ideal_plans(d)
+    planned = {r["address"] for r in plans}
+    items = (price_raises(d) + plans + [r for r in idle_shifts(d) + marketing_mix(d) if r["address"] not in planned] + demand_fixes(d) + provider_counts(d) + monopoly_targets(d)
              + from_insights(db, window) + expansion(db))
     for r in items:
         r["dismissed"] = r["key"] in (dismissed or set())

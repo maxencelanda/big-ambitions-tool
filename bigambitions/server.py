@@ -266,6 +266,10 @@ def create_app(db_path: Path = DEFAULT_DB, root: Path = SAVE_ROOT, watch: bool =
     def segments(window: int = 14):
         return read(segmentation.analyse, max(7, clamp(window)))
 
+    @app.get("/api/planning")
+    def plans():
+        return read(queries.planning)
+
     @app.get("/api/recruitment")
     def recruitment():
         return read(queries.recruitment)

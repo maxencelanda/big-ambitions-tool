@@ -96,6 +96,9 @@ export type BusinessDetail = {
   staffingHours: StaffingHour[];
   marketing: Marketing | null;
   marketingOptions: MarketingOption[];
+  plan: Plan | null;
+  planDays: PlanDay[];
+  planHours: PlanHour[];
   satisfactionHistory: { day: number; satisfaction: number; satCustomerService: number; satPricing: number; satCleanliness: number; satFacility: number }[];
   suppliers: { sourceAddress: string; sourceBusiness: string | null; item: string; targetAmount: number }[];
   serves: { destinationAddress: string; destinationBusiness: string | null; item: string; targetAmount: number }[];
@@ -112,6 +115,24 @@ export type Marketing = {
 export type MarketingOption = {
   campaigns: string; cost: number; marketingPoints: number; promotion: number; customersPerDay: number;
   profitPerDay: number | null; current: number | boolean; best: number | boolean;
+};
+export type Plan = {
+  address: string; business: string; stationKind: string; stationsInstalled: number; customersPerStationHour: number;
+  stationWage: number; valuePerCustomer: number; calibration: number; weeklyHoursPerEmployee: number;
+  campaigns: string; marketingCost: number; promotion: number; profitPerDay: number; customersPerDay: number;
+  stationHoursPerWeek: number; peakStations: number; employees: number; gainPerDay: number;
+  currentCampaigns: string; currentMarketingCost: number; currentPromotion: number; currentProfitPerDay: number;
+  currentCustomersPerDay: number; currentStationHoursPerWeek: number;
+  moreStationsExtra: number | null; moreStationsGainPerDay: number | null; openingHours: string;
+  days?: PlanDay[];
+};
+export type PlanDay = {
+  day: number; label: string; openFrom: number | null; openTo: number | null; customers: number;
+  stationHours: number; peakStations: number; shifts: string;
+};
+export type PlanHour = {
+  day: number; hour: number; open: number | boolean; openNow: number | boolean; customers: number;
+  stations: number; stationsNow: number;
 };
 export type Staffing = {
   stationKind: string; customersPerStationHour: number; avgCustomersPerDay: number;
@@ -276,6 +297,7 @@ export const api = {
   dismiss: (key: string, dismissed: boolean) =>
     request("/api/recommendations/dismiss", { method: "POST", body: JSON.stringify({ key, dismissed }) }),
   suppliers: (item?: string) => request<Supplier[]>(`/api/suppliers${item ? `?item=${item}` : ""}`),
+  planning: () => request<{ empty?: boolean; plans: Plan[] }>("/api/planning"),
   segmentation: (window = 14) => request<Segmentation>(`/api/segmentation?window=${window}`),
   customers: (days = 60) => request<CustomersData>(`/api/customers?days=${days}`),
   prices: (window = 7) => request<PricesOverview>(`/api/prices?window=${window}`),

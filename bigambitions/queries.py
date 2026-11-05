@@ -196,6 +196,10 @@ def business_detail(db: sqlite3.Connection, address: str, window: int = 7) -> di
     marketing = _one(db, "SELECT * FROM marketing WHERE address = ?", (address,)) if "marketing" in tables else None
     marketing_options = _all(db, "SELECT * FROM marketing_options WHERE address = ? ORDER BY promotion",
                              (address,)) if "marketing_options" in tables else []
+    plan = _one(db, "SELECT * FROM plans WHERE address = ?", (address,)) if "plans" in tables else None
+    plan_days = _all(db, "SELECT * FROM plan_days WHERE address = ? ORDER BY day", (address,)) if "plan_days" in tables else []
+    plan_hours = _all(db, "SELECT day, hour, open, openNow, customers, stations, stationsNow FROM plan_hours "
+                          "WHERE address = ? ORDER BY day, hour", (address,)) if "plan_hours" in tables else []
     satisfaction = _all(db, """SELECT day, satisfaction, satCustomerService, satPricing, satCleanliness, satFacility
                                FROM hist_businesses WHERE address = ? ORDER BY day""", (address,)) if "hist_businesses" in tables else []
     suppliers = _all(db, "SELECT * FROM logistics_targets WHERE destinationAddress = ?", (address,)) if "logistics_targets" in tables else []
@@ -214,6 +218,9 @@ def business_detail(db: sqlite3.Connection, address: str, window: int = 7) -> di
         "staffingHours": staffing_hours,
         "marketing": marketing,
         "marketingOptions": marketing_options,
+        "plan": plan,
+        "planDays": plan_days,
+        "planHours": plan_hours,
         "satisfactionHistory": satisfaction,
         "suppliers": suppliers,
         "serves": served,
@@ -335,6 +342,20 @@ def recommendation_list(db: sqlite3.Connection, window: int = 7) -> dict[str, An
         },
         "items": items,
     }
+
+
+def planning(db: sqlite3.Connection) -> dict[str, Any]:
+    """Plan idéal de chaque commerce (planning.py), du plus gros gain au plus petit."""
+    tables = _tables(db)
+    if not _ready(db) or "plans" not in tables:
+        return {"empty": True, "plans": []}
+    days = {}
+    for d in _all(db, "SELECT * FROM plan_days ORDER BY day"):
+        days.setdefault(d["address"], []).append(d)
+    plans = _all(db, "SELECT * FROM plans ORDER BY gainPerDay DESC")
+    for p in plans:
+        p["days"] = days.get(p["address"], [])
+    return {"plans": plans}
 
 
 def insight_list(db: sqlite3.Connection, window: int = 7) -> list[dict[str, Any]]:

@@ -900,16 +900,67 @@ class Save:
                 segment = self._segment(b)
                 if segment not in ("retail", "office"):
                     continue
-                demand = None
-                if segment == "office":
-                    product = (b.get("cachedAvailableProducts") or [None])[0]
-                    entry = self.pricing.demand.get((product, self._neighborhood(b))) or {}
-                    demand = (entry.get("demand") or 0) / 100
-                analysis = marketing.analyse(b, self.ref, segment, self.game, demand)
+                analysis = marketing.analyse(b, self.ref, segment, self.game, self._office_demand(b, segment))
                 if analysis:
                     result[_building_address(b)] = analysis
         self._marketing_cache = result
         return result
+
+    def _office_demand(self, b: dict, segment: str) -> float | None:
+        """Demande du marché (0-1) pour le premier produit d'un commerce de bureau : ses clients en dépendent."""
+        if segment != "office" or not self.pricing:
+            return None
+        product = (b.get("cachedAvailableProducts") or [None])[0]
+        entry = self.pricing.demand.get((product, self._neighborhood(b))) or {}
+        return (entry.get("demand") or 0) / 100
+
+    def _planning(self) -> dict[str, dict]:
+        """Plan idéal (marketing, horaires, postes) par adresse (voir planning.py), calculé une fois."""
+        if hasattr(self, "_planning_cache"):
+            return self._planning_cache
+        from . import planning
+
+        result = {}
+        marketing = self._marketing()
+        wages = {e["id"]: e["hourlyWage"] for e in self.employees if not e.get("poached")}
+        for b in self.player_buildings:
+            addr = _building_address(b)
+            segment = self._segment(b)
+            if addr in marketing:
+                plan = planning.analyse(b, self.ref, segment, self.game, self._office_demand(b, segment),
+                                        marketing[addr], wages)
+                if plan:
+                    result[addr] = plan
+        self._planning_cache = result
+        return result
+
+    def plans(self) -> list[Row]:
+        rows = []
+        for addr, a in self._planning().items():
+            cur = a["current"]
+            rows.append({
+                "address": addr, "business": self.business_name(addr),
+                **{k: v for k, v in a.items() if k not in ("current", "days", "hours", "moreStations")},
+                "currentCampaigns": cur["label"], "currentMarketingCost": cur["cost"], "currentPromotion": cur["promotion"],
+                "currentProfitPerDay": cur["profitPerDay"], "currentCustomersPerDay": cur["customersPerDay"],
+                "currentStationHoursPerWeek": cur["stationHoursPerWeek"],
+                "moreStationsExtra": (a["moreStations"] or {}).get("extra"),
+                "moreStationsGainPerDay": (a["moreStations"] or {}).get("gainPerDay"),
+                "openingHours": "; ".join(f"{d['label']} {d['open'][0]}-{d['open'][1]}" if d["open"] else f"{d['label']} closed"
+                                          for d in a["days"]),
+            })
+        return rows
+
+    def plan_days(self) -> list[Row]:
+        return [{"address": addr, "business": self.business_name(addr), "day": d["day"], "label": d["label"],
+                 "openFrom": d["open"][0] if d["open"] else None, "openTo": d["open"][1] if d["open"] else None,
+                 "customers": d["customers"], "stationHours": d["stationHours"], "peakStations": d["peakStations"],
+                 "shifts": ", ".join(f"{s['stations']}× {s['start']}-{s['end']}" for s in d["shifts"])}
+                for addr, a in self._planning().items() for d in a["days"]]
+
+    def plan_hours(self) -> list[Row]:
+        return [{"address": addr, "business": self.business_name(addr), **h}
+                for addr, a in self._planning().items() for h in a["hours"]]
 
     def marketing(self) -> list[Row]:
         rows = []
@@ -1041,6 +1092,9 @@ class Save:
             "staffing_hours": self.staffing_hours(),
             "marketing": self.marketing(),
             "marketing_options": self.marketing_options(),
+            "plans": self.plans(),
+            "plan_days": self.plan_days(),
+            "plan_hours": self.plan_hours(),
             "employees": self.employees_table(),
             "inventory": self.inventory(),
             "retail_prices": self.retail_prices(),

@@ -11,6 +11,7 @@ import { Pnl } from "./pages/Pnl";
 import { Prices } from "./pages/Prices";
 import { Recommendations } from "./pages/Recommendations";
 import { Recruitment } from "./pages/Recruitment";
+import { Planning } from "./pages/Planning";
 import { Segmentation } from "./pages/Segmentation";
 
 type Theme = "system" | "light" | "dark";
@@ -39,6 +40,7 @@ export function App() {
         <NavLink to="/recommendations" className="nav-link">Recommendations</NavLink>
         <NavLink to="/pnl" className="nav-link">P&L</NavLink>
         <NavLink to="/businesses" className="nav-link">Businesses</NavLink>
+        <NavLink to="/planning" className="nav-link">Hours & staffing</NavLink>
         <NavLink to="/prices" className="nav-link">Prices</NavLink>
         <NavLink to="/market" className="nav-link">Market</NavLink>
         <NavLink to="/recruitment" className="nav-link">Recruitment</NavLink>
@@ -61,6 +63,7 @@ export function App() {
           <Route path="/pnl" element={<Pnl />} />
           <Route path="/businesses" element={<Businesses />} />
           <Route path="/businesses/:address" element={<BusinessDetail />} />
+          <Route path="/planning" element={<Planning />} />
           <Route path="/prices" element={<Prices />} />
           <Route path="/market" element={<Market />} />
           <Route path="/recruitment" element={<Recruitment />} />
