@@ -107,3 +107,62 @@ export function PlanCard({ plan, days, hours, t }: { plan: Plan; days: PlanDay[]
     </div>
   );
 }
+
+/** Intensité 1-4 d'une case selon le nombre de postes idéal, rapporté au pic de la semaine. */
+function level(stations: number, peak: number): number {
+  return stations > 0 && peak > 0 ? Math.max(1, Math.ceil((4 * stations) / peak)) : 0;
+}
+
+/** Planning de la semaine : jours × heures, postes idéaux (couleur et grand chiffre) et occupés aujourd'hui. */
+export function ScheduleGrid({ plan, days, hours }: { plan: Plan; days: PlanDay[]; hours: PlanHour[] }) {
+  const label = STATION_LABEL[plan.stationKind] ?? "stations";
+  const one = label.replace(/s$/, "");
+  const cells = new Map(hours.map((h) => [`${h.day}-${h.hour}`, h]));
+  const peak = Math.max(1, ...hours.map((h) => h.stations));
+  const nowRanges = (d: number) => ranges(hours.filter((h) => h.day === d && h.openNow).map((h) => h.hour));
+  return (
+    <div className="card">
+      <h2>Weekly schedule</h2>
+      <p className="hint">
+        Each cell is one hour. <b>Big number and color: {label} to staff</b> in the ideal plan (one employee each);
+        small number: staffed now in the game. Hover a cell for its efficiency, expected customers and who works it now.
+      </p>
+      <div className="sched-wrap">
+        <table className="sched">
+          <thead>
+            <tr><th />{Array.from({ length: 24 }, (_, h) => <th key={h}>{h}</th>)}<th className="sched-sum">Ideal · now</th></tr>
+          </thead>
+          <tbody>
+            {days.map((d) => (
+              <tr key={d.day}>
+                <th scope="row">{d.label}</th>
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const c = cells.get(`${d.day}-${hour}`);
+                  const open = Boolean(c?.open), openNow = Boolean(c?.openNow);
+                  const lv = open ? level(c!.stations, peak) : 0;
+                  const title = `${d.label} ${hour}:00–${hour + 1}:00`
+                    + (c ? ` · efficiency ${percent(c.efficiency, 1)}` : "")
+                    + `\nIdeal: ${open ? `open, ${c!.stations} ${c!.stations === 1 ? one : label} for ${c!.customers.toFixed(1)} customers` : "closed"}`
+                    + `\nNow: ${openNow ? `open, ${c!.stationsNow} staffed` : "closed"}${c?.staffNow ? ` (${c.staffNow})` : ""}`;
+                  const cls = ["sched-cell", lv ? `lv${lv}` : "", openNow ? "now" : "", !open && openNow ? "cut" : ""].filter(Boolean).join(" ");
+                  return (
+                    <td key={hour} className={cls} title={title}>
+                      {open && <span className="ideal">{c!.stations}</span>}
+                      {openNow && <span className="cur">{c!.stationsNow}</span>}
+                    </td>
+                  );
+                })}
+                <td className="sched-sum"><b>{idealHours(d)}</b> · {nowRanges(d.day)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="sched-legend">
+        <span><i className="sched-key lv1" /> <i className="sched-key lv2" /> <i className="sched-key lv3" /> <i className="sched-key lv4" /> fewer → more {label} (peak {peak})</span>
+        <span><i className="sched-key now-key" /> open now in the game (small number = staffed now)</span>
+        <span><i className="sched-key cut" /> open now, close it</span>
+      </div>
+    </div>
+  );
+}

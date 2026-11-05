@@ -5,7 +5,7 @@ import { api, BusinessDetail as Detail, Employee, Product } from "../api";
 import { businessLink } from "../components/BusinessTables";
 import { baseOption, Chart, ThemeColors, useThemeColors } from "../components/Chart";
 import { InsightList } from "../components/Insights";
-import { PlanCard } from "../components/Plan";
+import { PlanCard, ScheduleGrid } from "../components/Plan";
 import { Column, SortableTable } from "../components/SortableTable";
 import { change, money, percent, signedPercent } from "../format";
 import { WindowSelect } from "./Dashboard";
@@ -256,6 +256,7 @@ export function BusinessDetail() {
         </div>
       )}
 
+      {data.plan && <div className="section"><ScheduleGrid plan={data.plan} days={data.planDays} hours={data.planHours} /></div>}
       {data.plan && <div className="section"><PlanCard plan={data.plan} days={data.planDays} hours={data.planHours} t={t} /></div>}
       {data.marketing && <div className="section"><MarketingCard data={data} /></div>}
 

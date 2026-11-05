@@ -59,7 +59,7 @@ def _shifts(stations: dict[int, int]) -> list[dict[str, int]]:
 
 
 class _Business:
-    def __init__(self, reg: dict, ref, segment: str, wages: dict[str, float]):
+    def __init__(self, reg: dict, ref, segment: str, wages: dict[str, float], names: dict[str, str] | None = None):
         items = reg.get("itemInstances") or {}
         stations: dict[str, list[float]] = {}
         for item in items.values():
@@ -75,6 +75,7 @@ class _Business:
         self.per_station = max(capacities) if capacities else 0
         # Postes occupés aujourd'hui et salaire des employés qui les tiennent.
         self.now: dict[tuple[int, int], list[float]] = {}
+        self.staff_now: dict[tuple[int, int], list[str]] = {}
         self.open_now: set[tuple[int, int]] = set()
         weekly: dict[str, int] = {}
         for day in reg.get("scheduleDays") or []:
@@ -89,6 +90,7 @@ class _Business:
                 weekly[shift["employeeId"]] = weekly.get(shift["employeeId"], 0) + shift["endingHour"] - shift["startingHour"]
                 for h in range(shift["startingHour"], shift["endingHour"]):
                     self.now.setdefault((day["day"], h), []).append(wages[shift["employeeId"]])
+                    self.staff_now.setdefault((day["day"], h), []).append((names or {}).get(shift["employeeId"]) or "?")
         on_station = [wages[e] for e in weekly]
         self.wage = sum(on_station) / len(on_station) if on_station else None
         self.weekly_hours = sum(weekly.values()) / len(weekly) if weekly else DEFAULT_WEEKLY_HOURS
@@ -155,11 +157,11 @@ def _current(ctx: Context, biz: _Business, combo: tuple[int, ...], calibration: 
 
 
 def analyse(reg: dict, ref, segment: str, game: dict, demand: float | None, mk: dict[str, Any] | None,
-            wages: dict[str, float]) -> dict[str, Any] | None:
+            wages: dict[str, float], names: dict[str, str] | None = None) -> dict[str, Any] | None:
     """Plan idéal ; None sans analyse marketing (marge par client), sans poste de service ou sans salaire connu."""
     if not mk or mk.get("valuePerCustomer") is None:
         return None
-    biz = _Business(reg, ref, segment, wages)
+    biz = _Business(reg, ref, segment, wages, names)
     if not biz.installed or not biz.per_station or biz.wage is None:
         return None
     ctx = Context(reg, ref, segment, game, demand)
@@ -183,7 +185,8 @@ def analyse(reg: dict, ref, segment: str, game: dict, demand: float | None, mk: 
                 hours.append({"day": day, "hour": h, "open": cell is not None, "openNow": (day, h) in biz.open_now,
                               "efficiency": round(ctx.efficiency(day, h), 4),
                               "customers": round(cell["customers"], 2) if cell else 0.0,
-                              "stations": cell["stations"] if cell else 0, "stationsNow": now})
+                              "stations": cell["stations"] if cell else 0, "stationsNow": now,
+                              "staffNow": ", ".join(sorted(biz.staff_now.get((day, h), [])))})
     days = []
     for d in best["days"]:
         profile = {h: c["stations"] for (day, h), c in best["hours"].items() if day == d["day"]}

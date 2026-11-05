@@ -923,12 +923,13 @@ class Save:
         result = {}
         marketing = self._marketing()
         wages = {e["id"]: e["hourlyWage"] for e in self.employees if not e.get("poached")}
+        names = {e["id"]: (e.get("characterData") or {}).get("name") for e in self.employees}
         for b in self.player_buildings:
             addr = _building_address(b)
             segment = self._segment(b)
             if addr in marketing:
                 plan = planning.analyse(b, self.ref, segment, self.game, self._office_demand(b, segment),
-                                        marketing[addr], wages)
+                                        marketing[addr], wages, names)
                 if plan:
                     result[addr] = plan
         self._planning_cache = result

@@ -133,7 +133,7 @@ export type PlanDay = {
 };
 export type PlanHour = {
   day: number; hour: number; open: number | boolean; openNow: number | boolean; efficiency: number; customers: number;
-  stations: number; stationsNow: number;
+  stations: number; stationsNow: number; staffNow?: string | null;
 };
 export type Staffing = {
   stationKind: string; customersPerStationHour: number; avgCustomersPerDay: number;

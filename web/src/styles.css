@@ -298,3 +298,25 @@ td a:hover { text-decoration: underline; }
 .mk-lines .impact { color: var(--good-text); font-weight: 600; }
 .pos { color: var(--good-text); font-weight: 600; }
 td.wrap { white-space: normal; min-width: 180px; }
+
+/* Planning hebdomadaire (Hours & staffing) */
+.sched-wrap { overflow-x: auto; }
+.sched { border-collapse: separate; border-spacing: 2px; width: 100%; min-width: 760px; }
+.sched th { font-size: 11px; font-weight: 500; color: var(--text-muted); padding: 2px; text-align: center; border: 0; cursor: default; }
+.sched th[scope="row"] { text-align: left; padding-right: 6px; color: var(--text-secondary); }
+.sched-cell { position: relative; height: 34px; min-width: 26px; padding: 0; text-align: center; border: 0; border-radius: 4px;
+  background: var(--surface-2); font-variant-numeric: tabular-nums; }
+.sched-cell .ideal { font-size: 13px; font-weight: 650; }
+.sched-cell .cur { position: absolute; top: 1px; right: 3px; font-size: 9px; color: var(--text-muted); }
+.sched-cell.now { box-shadow: inset 0 -3px 0 var(--text-secondary); }
+.sched-cell.cut, .sched-key.cut { background: repeating-linear-gradient(135deg, var(--surface-2) 0 4px, var(--border) 4px 6px); }
+.lv1 { background: color-mix(in srgb, var(--series-1) 20%, var(--surface-1)); }
+.lv2 { background: color-mix(in srgb, var(--series-1) 40%, var(--surface-1)); }
+.lv3 { background: color-mix(in srgb, var(--series-1) 65%, var(--surface-1)); color: #fff; }
+.lv4 { background: var(--series-1); color: #fff; }
+.lv3 .cur, .lv4 .cur { color: rgba(255, 255, 255, 0.8); }
+.sched-sum { white-space: nowrap; font-size: 12px; padding-left: 8px !important; text-align: left !important; border: 0 !important; }
+.sched-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.sched-key { display: inline-block; width: 14px; height: 12px; border-radius: 3px; vertical-align: -2px; }
+.sched-key.now-key { background: var(--surface-2); box-shadow: inset 0 -3px 0 var(--text-secondary); }
+.toolbar { display: flex; gap: 12px; align-items: center; margin: 4px 0 12px; font-size: 13px; color: var(--text-secondary); }
