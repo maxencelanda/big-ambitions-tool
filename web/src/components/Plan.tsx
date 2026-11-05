@@ -74,7 +74,7 @@ export function PlanCard({ plan, days, hours, t }: { plan: Plan; days: PlanDay[]
       {plan.breakEvenEfficiency != null && (
         <p className="hint">
           <b>An hour pays from {percent(plan.breakEvenEfficiency, 1)} efficiency</b> (day × hour factor of the business type, as on
-          biggerambitions).
+          biggerambitions, which caps it at 100 %: the game does not, so a 150 % hour brings more customers than a 138 % one).
           {plan.firstCustomerEfficiency != null && plan.firstCustomerEfficiency >= plan.breakEvenEfficiency - 1e-9
             ? <> From there the game rounds up to 1 customer ({money(plan.valuePerCustomer)}), more than one {label.replace(/s$/, "")}'s wage ({money(plan.stationWage)}/h).</>
             : <> Below that, the few customers do not pay a {label.replace(/s$/, "")} ({money(plan.stationWage)}/h).</>}
