@@ -348,9 +348,20 @@ class Save:
         return self._negotiation_cache
 
     def negotiation_options(self) -> list[Row]:
-        return [{"candidateId": cid, **{k: v for k, v in o.items() if k != "script"},
-                 "script": "; ".join(f"{s['offer']:.2f}→{s['counter']:.2f}" for s in o["script"])}
-                for cid, p in self._negotiation_plans().items() for o in p["options"]]
+        """Options par candidat et par jour de début (startDay vide : négociation déjà en cours)."""
+        rows = []
+        for cid, p in self._negotiation_plans().items():
+            starts = p["days"] or [{"day": None, "negotiate": p["negotiateThreshold"], "firm": p["firmThreshold"],
+                                    "options": p["options"], "bestRounds": p["bestRounds"],
+                                    "balancedRounds": p["balancedRounds"]}]
+            for d in starts:
+                for o in d["options"]:
+                    rows.append({"candidateId": cid, "startDay": d["day"], "negotiateThreshold": d["negotiate"],
+                                 "firmThreshold": d["firm"], "isBest": o["rounds"] == d["bestRounds"],
+                                 "isBalanced": o["rounds"] == d["balancedRounds"],
+                                 **{k: v for k, v in o.items() if k != "script"},
+                                 "script": "; ".join(f"{s['offer']:.2f}→{s['counter']:.2f}" for s in o["script"])})
+        return rows
 
     def candidate_fits(self) -> list[Row]:
         """Chaque candidat face à chaque commerce qui emploie sa compétence principale."""

@@ -52,6 +52,7 @@ function Tracker({ c, n, target }: { c: Candidate; n: number; target: number }) 
     if (v > 0) { setCounters([...counters, v]); setInput(""); }
   };
   const risky = low - 6 < 20;
+  const heldFirm = counters.some((v, i) => i > 0 && Math.abs(v - counters[i - 1]) <= 0.001);
   return (
     <div>
       <h3>Live negotiation</h3>
@@ -68,6 +69,10 @@ function Tracker({ c, n, target }: { c: Candidate; n: number; target: number }) 
       {counters.length > 0 && (
         <p className="muted" style={{ fontSize: 12 }}>Their offers: {counters.map((v) => usd(v)).join(" → ")}</p>
       )}
+      {heldFirm && (
+        <p className="neg" style={{ fontSize: 12 }}>They held firm: your offer was below {pct(n)} of their counter.
+          Check the start day above (the day you opened the negotiation), and never repeat an offer they refused.</p>
+      )}
       {last ? (
         <ul className="script">
           <li>Round {rounds} · mood {low === high ? low : `${low}–${high}`} · satisfaction if hired now{" "}
@@ -83,13 +88,21 @@ function Tracker({ c, n, target }: { c: Candidate; n: number; target: number }) 
 
 /** Négociation d'un candidat : seuils exacts, options (rounds → salaire, satisfaction) et suivi en direct. */
 function Negotiation({ c }: { c: Candidate }) {
-  const [rounds, setRounds] = useState(c.bestRounds ?? 0);
-  const n = c.negotiateThreshold ?? 0.9;
-  const option = c.negotiation.find((o) => o.rounds === rounds) ?? c.negotiation[0];
+  // Les seuils dépendent du jour où la négociation a été ouverte : par défaut aujourd'hui (on commence souvent tout de suite).
+  const days = [...new Set(c.negotiation.map((o) => o.startDay))];
+  const [day, setDay] = useState(days[0]);
+  const all = c.negotiation.filter((o) => o.startDay === day);
+  const best = all.find((o) => o.isBest)?.rounds ?? 0;
+  const balanced = all.find((o) => o.isBalanced)?.rounds ?? 0;
+  const [rounds, setRounds] = useState(best);
+  const n = all[0]?.negotiateThreshold ?? c.negotiateThreshold ?? 0.9;
+  const firm = all[0]?.firmThreshold ?? c.firmThreshold;
+  const option = all.find((o) => o.rounds === Math.min(rounds, best)) ?? all[0];
   const steps = option?.script ? option.script.split("; ").map((x) => x.split("→").map(Number)) : [];
-  const startDays = (c.startDays ?? "").split(", ").filter(Boolean);
+  const bestOf = (d: number | null) => c.negotiation.find((o) => o.startDay === d && o.isBest);
+  const pick = (d: number | null) => { setDay(d); setRounds(bestOf(d)?.rounds ?? 0); };
   const columns: Column<NegotiationOption>[] = [
-    { key: "rounds", label: "Rounds", num: true, render: (o) => <>{o.rounds}{o.rounds === c.bestRounds ? <span className="tag"> max</span> : o.rounds === c.balancedRounds ? <span className="tag"> balanced</span> : null}</> },
+    { key: "rounds", label: "Rounds", num: true, render: (o) => <>{o.rounds}{o.rounds === best ? <span className="tag"> max</span> : o.rounds === balanced ? <span className="tag"> balanced</span> : null}</> },
     { key: "final", label: "Wage you get", num: true, title: "Expected (cautious: slowest counter-offers, biggest mood drops)",
       render: (o) => <><b>{usd(o.final)}</b> <span className="muted">({usd(o.finalCautious)})</span></> },
     { key: "saving", label: "Saved/h", num: true, value: (o) => (c.asking ?? 0) - o.final, render: (o) => usd((c.asking ?? 0) - o.final) },
@@ -104,24 +117,30 @@ function Negotiation({ c }: { c: Candidate }) {
       <p className="hint">
         Thresholds are drawn when the negotiation starts, from the candidate and the day: the tool reproduces the game's draw exactly.
         Offers from <b>{pct(n)}</b> of their last counter get a counter-offer about halfway (−4 to −6 mood each);
-        between {pct(c.firmThreshold)} and {pct(n)} they hold firm (−10 to −20 mood); below {pct(c.firmThreshold)} they raise their price.
+        between {pct(firm)} and {pct(n)} they hold firm (−10 to −20 mood); below {pct(firm)} they raise their price.
         They accept 95 % of their last counter while mood ≥ 50 (97.5 % from 25, 99 % below), and walk away under 20.
         No signing bonus: they count it over 1,920 hours.
       </p>
       <div className="mk-lines">
         {c.negotiationPending
           ? <div><span className="muted">In progress</span> negotiation already started: thresholds are fixed, mood {c.negotiationMood}.</div>
-          : <div><span className="muted">When</span> start on <b>day {c.negotiationStartDay}</b>
-              {startDays.length > 1 && <span className="muted"> (threshold by start day: {startDays.join(" · ")})</span>}</div>}
-        <div><span className="muted">Asking</span> {usd(c.asking)}/h · <span className="muted">max saving</span> <b>{usd(c.bestWage)}</b> after {c.bestRounds} rounds
-          (satisfaction at hire ≈{c.bestSatisfaction?.toFixed(0)}) · <span className="muted">balanced</span> {usd(c.balancedWage)} after {c.balancedRounds} rounds (≈{c.balancedSatisfaction?.toFixed(0)})</div>
+          : <div><span className="muted">Negotiation opened on</span>{" "}
+              <select value={String(day)} onChange={(e) => pick(Number(e.target.value))}>
+                {days.map((d, i) => (
+                  <option key={String(d)} value={String(d)}>day {d}{i === 0 ? " (today)" : ""} · {pct(c.negotiation.find((o) => o.startDay === d)?.negotiateThreshold)} · {usd(bestOf(d)?.final)}{d === c.negotiationStartDay ? " ← best day" : ""}</option>
+                ))}
+              </select>
+              {day !== c.negotiationStartDay && <span className="muted"> · waiting until day {c.negotiationStartDay} would get {usd(c.bestWage)} instead of {usd(bestOf(day)?.final)}</span>}
+              <div className="muted" style={{ fontSize: 12 }}>Pick the day you actually opened it: offers computed for another day get refused.</div></div>}
+        <div><span className="muted">Asking</span> {usd(c.asking)}/h · <span className="muted">max saving</span> <b>{usd(bestOf(day)?.final)}</b> after {best} rounds
+          (satisfaction at hire ≈{bestOf(day)?.satisfaction.toFixed(0)}) · <span className="muted">balanced</span> {usd(all.find((o) => o.isBalanced)?.final)} after {balanced} rounds (≈{all.find((o) => o.isBalanced)?.satisfaction.toFixed(0)})</div>
       </div>
-      <SortableTable rows={c.negotiation} columns={columns} rowKey={(o) => String(o.rounds)} initialSort="rounds" initialDesc={false} maxHeight={260} />
+      <SortableTable rows={all} columns={columns} rowKey={(o) => String(o.rounds)} initialSort="rounds" initialDesc={false} maxHeight={260} />
       <div className="grid two section">
         <div>
           <h3>Script for{" "}
             <select value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
-              {c.negotiation.map((o) => <option key={o.rounds} value={o.rounds}>{o.rounds}</option>)}
+              {all.map((o) => <option key={o.rounds} value={o.rounds}>{o.rounds}</option>)}
             </select> round(s)</h3>
           <ol className="script">
             {steps.map(([offer, next], i) => (
@@ -131,7 +150,7 @@ function Negotiation({ c }: { c: Candidate }) {
           </ol>
           <p className="muted" style={{ fontSize: 12 }}>Counters are random (40–60 % of the way): compute each offer from their actual last counter.</p>
         </div>
-        <Tracker c={c} n={n} target={rounds} />
+        <Tracker key={String(day)} c={c} n={n} target={Math.min(rounds, best)} />
       </div>
     </div>
   );

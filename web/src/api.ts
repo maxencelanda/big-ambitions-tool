@@ -223,6 +223,7 @@ export type Candidate = {
   negotiation: NegotiationOption[];
 };
 export type NegotiationOption = {
+  startDay: number | null; negotiateThreshold: number; firmThreshold: number; isBest: number; isBalanced: number;
   rounds: number; final: number; finalCautious: number; mood: number; moodCautious: number;
   satisfaction: number; satisfactionCautious: number; savingPerWeek: number; script: string;
 };

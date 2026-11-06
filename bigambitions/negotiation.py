@@ -130,6 +130,27 @@ def plan(employee_id: str, asking: float, day: int, expires_in_hours: int | None
         start_day = best["day"]
         negotiate, firm = thresholds(employee_id, start_day)
         mood, counter = START_MOOD, _ceil(asking, 0.05)
+    options = _options(counter, negotiate, mood, weekly_hours)
+    # Maximum d'économie sans risque d'abandon ; « équilibré » : la clôture reste à 95 % (humeur ≥ 50).
+    best_k, balanced_k = _picks(options)
+    # Le joueur ne commence pas forcément le jour conseillé : options pour chaque jour de début possible.
+    for d in days:
+        d["negotiate"], d["firm"] = thresholds(employee_id, d["day"])
+        d["options"] = _options(counter, d["negotiate"], mood, weekly_hours)
+        d["bestRounds"], d["balancedRounds"] = _picks(d["options"])
+    return {
+        "asking": round(counter, 2), "negotiateThreshold": negotiate, "firmThreshold": firm,
+        "todayNegotiateThreshold": days[0]["negotiate"] if days else negotiate,
+        "startDay": start_day, "days": days, "mood": mood, "pending": bool(pending),
+        "bestRounds": best_k, "balancedRounds": balanced_k, "options": options,
+    }
+
+
+def _picks(options: list[dict[str, Any]]) -> tuple[int, int]:
+    return options[-1]["rounds"], max((o["rounds"] for o in options if o["moodCautious"] >= GOOD_MOOD), default=0)
+
+
+def _options(counter: float, negotiate: float, mood: int, weekly_hours: float) -> list[dict[str, Any]]:
     options = []
     for k in range(0, (mood - DECLINE_BELOW) // DROP_CAUTIOUS + 1):
         expected = simulate(counter, negotiate, k, STEP_EXPECTED, DROP_EXPECTED, mood)
@@ -139,15 +160,7 @@ def plan(employee_id: str, asking: float, day: int, expires_in_hours: int | None
                         "satisfaction": expected["satisfaction"], "satisfactionCautious": cautious["satisfaction"],
                         "savingPerWeek": round((counter - expected["final"]) * weekly_hours, 2),
                         "script": expected["script"]})
-    # Maximum d'économie sans risque d'abandon ; « équilibré » : la clôture reste à 95 % (humeur ≥ 50).
-    best_k = options[-1]["rounds"]
-    balanced_k = max((o["rounds"] for o in options if o["moodCautious"] >= GOOD_MOOD), default=0)
-    return {
-        "asking": round(counter, 2), "negotiateThreshold": negotiate, "firmThreshold": firm,
-        "todayNegotiateThreshold": days[0]["negotiate"] if days else negotiate,
-        "startDay": start_day, "days": days, "mood": mood, "pending": bool(pending),
-        "bestRounds": best_k, "balancedRounds": balanced_k, "options": options,
-    }
+    return options
 
 
 def pending_negotiations(game: dict[str, Any]) -> dict[str, dict[str, Any]]:
