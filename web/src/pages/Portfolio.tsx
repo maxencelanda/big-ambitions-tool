@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, CandidateProduct, CurrentProduct, Portfolio as PortfolioData, PortfolioBusiness } from "../api";
 import { businessLink } from "../components/BusinessTables";
+import { baseOption, Chart, useThemeColors } from "../components/Chart";
 import { Column, SortableTable } from "../components/SortableTable";
 import { money, percent } from "../format";
 import { WindowSelect } from "./Dashboard";
@@ -64,6 +65,70 @@ function Businesses({ data }: { data: PortfolioData }) {
         Hover “Within reach” for the levers; uncertain ideas (low confidence) are left out of it.
       </p>
       <SortableTable rows={data.businesses} columns={columns} rowKey={(b) => b.address} initialSort="profitPerDay" />
+    </div>
+  );
+}
+
+const PIE_COLORED = 5;
+
+/** Classement par profit (après frais de structure) et part de chaque commerce dans le profit total. */
+function Ranking({ data }: { data: PortfolioData }) {
+  const t = useThemeColors();
+  const profit = (b: PortfolioBusiness) => b.profitAfterOverheadPerDay ?? b.profitPerDay;
+  const sorted = [...data.businesses].sort((a, b) => profit(b) - profit(a));
+  const total = sorted.reduce((s, b) => s + Math.max(profit(b), 0), 0);
+  let running = 0;
+  type Row = PortfolioBusiness & { rank: number; profit: number; share: number; cumulative: number; roi: number | null };
+  const rows: Row[] = sorted.map((b, i) => {
+    const p = profit(b);
+    running += Math.max(p, 0);
+    return { ...b, rank: i + 1, profit: p, share: total ? p / total : 0, cumulative: total ? running / total : 0,
+             roi: b.capital ? p / b.capital : null };
+  });
+  const colors = [t.series1, t.series2, t.series3, t.series4, t.series5];
+  const option = useMemo(() => ({
+    ...baseOption(t),
+    tooltip: { ...baseOption(t).tooltip, trigger: "item",
+      formatter: (p: { name: string; value: number; percent: number }) => `<b>${p.name}</b><br/>${money(p.value)}/day · ${p.percent.toFixed(1)} %` },
+    series: [{
+      type: "pie", radius: ["40%", "66%"], center: ["50%", "52%"], startAngle: 90,
+      itemStyle: { borderColor: t.surface, borderWidth: 2, borderRadius: 4 },
+      label: { color: t.secondary, fontSize: 11, formatter: (p: { name: string; percent: number }) => `${p.name}
+${p.percent.toFixed(0)} %` },
+      labelLine: { lineStyle: { color: t.axis } },
+      data: rows.filter((r) => r.profit > 0).map((r, i) => ({
+        name: r.name, value: Math.round(r.profit),
+        // Les cinq premiers en couleur, les suivants en gris : leur nom reste au survol et dans le tableau.
+        itemStyle: { color: i < PIE_COLORED ? colors[i] : t.muted, opacity: i < PIE_COLORED ? 1 : 0.55 },
+        label: { show: r.share >= 0.04 },
+        labelLine: { show: r.share >= 0.04 },
+      })),
+    }],
+  }), [rows, t]);
+  const columns: Column<Row>[] = [
+    { key: "rank", label: "#", num: true },
+    { key: "name", label: "Business", render: (r) => businessLink(r) },
+    { key: "profit", label: "Profit/day", num: true, title: "After its share of HQ and warehouse costs",
+      render: (r) => <span className={r.profit < 0 ? "neg" : undefined}>{money(r.profit)}</span> },
+    { key: "share", label: "Share", num: true, render: (r) => percent(r.share, 1) },
+    { key: "cumulative", label: "Cumulative", num: true, title: "Share of total profit made by this business and every one above it", render: (r) => percent(r.cumulative) },
+    { key: "roi", label: "Return/day", num: true, title: "Profit per day / money invested in furniture and equipment", render: (r) => percent(r.roi, 1) },
+    { key: "profitPerEmployee", label: "/employee", num: true, render: (r) => money(r.profitPerEmployee) },
+    { key: "upside", label: "With levers", num: true, value: (r) => r.profit + r.likelyGainPerDay + r.productGainPerDay,
+      title: "Profit/day if the reliable levers and product additions are applied", render: (r) => money(r.profit + r.likelyGainPerDay + r.productGainPerDay) },
+  ];
+  const top = rows.findIndex((r) => r.cumulative >= 0.8) + 1;
+  return (
+    <div className="card">
+      <h2>Profit ranking</h2>
+      <p className="hint">
+        Profit per day after each business's share of HQ and warehouse costs: {money(total)}/day in all.
+        The top {top} make 80 % of it. Closing a business loses its operating profit; most of its HQ and warehouse share stays.
+      </p>
+      <div className="grid" style={{ gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)", alignItems: "center" }}>
+        <Chart option={option} height={360} label="Share of total profit per business" />
+        <SortableTable rows={rows} columns={columns} rowKey={(r) => r.address} initialSort="rank" initialDesc={false} />
+      </div>
     </div>
   );
 }
@@ -199,6 +264,7 @@ export function Portfolio() {
         <Tile label="Invested" value={money(s.capital)} sub="furniture and equipment" />
         <Tile label="To review" value={String(review.length)} sub={review.length ? review.map((b) => b.name).join(", ") : "every business pulls its weight"} />
       </div>
+      <div className="section"><Ranking data={data} /></div>
       <div className="section"><Businesses data={data} /></div>
       <div className="section"><Products data={data} /></div>
       <div className="grid two section">
