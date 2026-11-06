@@ -293,6 +293,27 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
+export type PortfolioBusiness = {
+  address: string; name: string; typeLabel: string; segment: string; neighborhood: string; creationDay: number; daysOpen: number;
+  revenuePerDay: number; profitPerDay: number; profitAfterOverheadPerDay: number | null; margin: number | null;
+  capital: number; paybackDays: number | null; employees: number; profitPerEmployee: number | null;
+  likelyGainPerDay: number; possibleGainPerDay: number; productGainPerDay: number; manualRestock: number;
+  levers: { title: string; gainPerDay: number; confidence: string }[]; verdict: string; reason: string;
+};
+type ProductBase = { item: string; itemLabel: string; kind: string; primary: number; impact: number; demand: number | null;
+  importable: number; atWholesaler: number; fromFactory: number; logistics: number; unitsPerDay: number; price: number;
+  unitCost: number | null; marginPerDay: number };
+export type CurrentProduct = ProductBase & { revenuePerDay: number; importCost: number | null; importSavingPerDay: number | null;
+  manualRestock: boolean; consumed: boolean; imported: boolean; share: number | null; verdict: string; reason: string };
+export type CandidateProduct = ProductBase & { source: string; unitMargin: number;
+  equipmentOwned: string | null; equipment: string | null; equipmentCost: number | null };
+export type Portfolio = {
+  empty?: boolean; window: number; firstDay: number; lastDay: number; typicalProfitPerDay: number;
+  businesses: PortfolioBusiness[];
+  products: Record<string, { calibration: number; customersPerDay: number; current: CurrentProduct[]; candidates: CandidateProduct[] }>;
+  summary: { profitPerDay: number; likelyGainPerDay: number; productGainPerDay: number; capital: number; toReview: number };
+};
+
 export const api = {
   status: () => request<Status>("/api/status"),
   dashboard: (window = 7) => request<Dashboard>(`/api/dashboard?window=${window}`),
@@ -309,6 +330,7 @@ export const api = {
     request("/api/recommendations/dismiss", { method: "POST", body: JSON.stringify({ key, dismissed }) }),
   suppliers: (item?: string) => request<Supplier[]>(`/api/suppliers${item ? `?item=${item}` : ""}`),
   planning: () => request<{ empty?: boolean; plans: Plan[] }>("/api/planning"),
+  portfolio: (window = 14) => request<Portfolio>(`/api/portfolio?window=${window}`),
   segmentation: (window = 14) => request<Segmentation>(`/api/segmentation?window=${window}`),
   customers: (days = 60) => request<CustomersData>(`/api/customers?days=${days}`),
   prices: (window = 7) => request<PricesOverview>(`/api/prices?window=${window}`),

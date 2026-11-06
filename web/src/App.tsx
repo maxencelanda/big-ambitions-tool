@@ -8,6 +8,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Market } from "./pages/Market";
 import { Placeholder } from "./pages/Placeholder";
 import { Pnl } from "./pages/Pnl";
+import { Portfolio } from "./pages/Portfolio";
 import { Prices } from "./pages/Prices";
 import { Recommendations } from "./pages/Recommendations";
 import { Recruitment } from "./pages/Recruitment";
@@ -40,6 +41,7 @@ export function App() {
         <NavLink to="/recommendations" className="nav-link">Recommendations</NavLink>
         <NavLink to="/pnl" className="nav-link">P&L</NavLink>
         <NavLink to="/businesses" className="nav-link">Businesses</NavLink>
+        <NavLink to="/portfolio" className="nav-link">Portfolio</NavLink>
         <NavLink to="/planning" className="nav-link">Hours & staffing</NavLink>
         <NavLink to="/prices" className="nav-link">Prices</NavLink>
         <NavLink to="/market" className="nav-link">Market</NavLink>
@@ -63,6 +65,7 @@ export function App() {
           <Route path="/pnl" element={<Pnl />} />
           <Route path="/businesses" element={<Businesses />} />
           <Route path="/businesses/:address" element={<BusinessDetail />} />
+          <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/planning" element={<Planning />} />
           <Route path="/prices" element={<Prices />} />
           <Route path="/market" element={<Market />} />

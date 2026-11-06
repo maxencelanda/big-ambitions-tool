@@ -859,6 +859,90 @@ class Save:
                 })
         return rows
 
+    def import_discount(self) -> float:
+        """Meilleure remise d'import obtenue : 1 − compétence de l'agent d'achat × 25 % (ImportPartnership.GetDiscount)."""
+        best = 0.0
+        for p in self.game.get("importPartnerships", []):
+            e = self.employee_by_id.get(p.get("employeeInstanceId") or "")
+            if e:
+                skills = (e.get("characterData") or {}).get("skills") or []
+                best = max(best, max((s["value"] for s in skills if s["name"] == "ba:skill_purchasingagent"), default=0))
+        return 1 - 0.25 * min(best, 100) / 100
+
+    def product_options(self) -> list[Row]:
+        """Produits vendus et vendables par commerce de détail, avec ce qui règle leurs ventes dans le jeu.
+
+        Ventes par heure (CustomerEntriesCalculatorRetail) : clients × productSalesRatio × demande du quartier / 100
+        × (1 + (satisfaction − 50) / 100) × impact du produit pour ce type × quantité (1 à max pour un produit
+        principal). Chaque produit est tiré indépendamment : en ajouter un ne retire pas de ventes aux autres.
+        """
+        if not self.pricing:
+            return []
+        p = self.pricing
+        option = bool((self.game.get("gameVariables") or {}).get("allProductsAvailableFromImporters"))
+        importable = set()
+        for imp in self.ref.importers:
+            importable.update(imp["items"])
+            if option:
+                importable.update(imp["extraItems"])
+        wholesale = {i for b in self.buildings if b.get("businessTypeName") == "ba:businesstype_wholesalestore"
+                     for i in b.get("cachedAvailableProducts") or []}
+        discount = self.import_discount()
+        logistics = {(address(d.get("deliveryTargetAddress")), t["itemName"])
+                     for plan in self.game.get("logisticsManagerPlans", []) for d in plan.get("destinations") or []
+                     for t in d.get("stockTargets") or []}
+        # Meubles qui peuvent présenter chaque produit (itemsThatCanShowcase).
+        holders = defaultdict(list)
+        for f in self.ref.items.values():
+            if f.get("isFurniture"):
+                for shown in f.get("itemsThatCanShowcase") or []:
+                    holders[shown].append(f)
+        rows = []
+        for b in self.player_buildings:
+            bt = self.ref.business_types.get(b.get("businessTypeName") or "")
+            if not bt or self._segment(b) != "retail":
+                continue
+            addr, nb = _building_address(b), self._neighborhood(b)
+            selling = set(b.get("cachedAvailableProducts") or [])
+            impacts = {x["itemName"]: x["impact"] for x in bt.get("businessProducts") or []}
+            fees = {bt.get("defaultEntranceFee"), bt.get("weekendOnlyEntranceFee")} - {"", None}
+            max_amount = bt.get("maxAmountPerProduct") or 1
+            owned = {i.get("itemName") for i in self._items(b)}
+            for item in sorted(set(impacts) | selling):
+                it = self.ref.item(item)
+                if not it or "ba:itemtag_isbag" in (it.get("tags") or []) or it.get("isSpecialRivalOnly"):
+                    continue
+                impact = impacts.get(item, 0.025)
+                primary = impact >= 1
+                amount = max_amount if max_amount <= 1 else ((1 + max_amount) / 2 if primary else 1.0)
+                demanded = bool(it.get("isADemandedProduct"))
+                demand = (p.demand.get((item, nb)) or {}).get("demand") if demanded else 100
+                service = bool((it.get("type") or 0) & 4)
+                cost = p.purchase_price_estimate(item, nb)
+                fits = holders.get(item, [])
+                have = [f for f in fits if f["itemName"] in owned]
+                buyable = sorted((f for f in fits if f.get("defaultMarketPrice")), key=lambda f: f["defaultMarketPrice"])
+                rows.append({
+                    "address": addr, "business": b.get("BusinessName"), "neighborhood": clean(nb),
+                    "item": clean(item), "itemLabel": self.ref.label(item), "selling": item in selling,
+                    "kind": "entrance" if item in fees else "service" if service else "product",
+                    "primary": primary, "impact": round(impact, 3), "salesRatio": it.get("productSalesRatio") or 1.0,
+                    "demand": demand, "amountFactor": amount,
+                    "price": round(p.optimal_price(item, nb), 2),
+                    "ceiling": p.ceiling(item, nb),
+                    "costEstimate": round(cost, 4) if cost else None,
+                    # Grossiste : indice de prix 105 (+5 %) ; import : remise de l'agent d'achat.
+                    "wholesaleCost": round(cost * 1.05, 4) if cost and item in wholesale else None,
+                    "importCost": round(cost * discount, 4) if cost and item in importable else None,
+                    "importable": item in importable, "atWholesaler": item in wholesale,
+                    "fromFactory": item in self.ref.recipes,
+                    "logistics": (addr, item) in logistics,
+                    "equipmentOwned": self.ref.label(have[0]["itemName"]) if have else None,
+                    "equipment": self.ref.label(buyable[0]["itemName"]) if buyable else None,
+                    "equipmentCost": buyable[0]["defaultMarketPrice"] if buyable else None,
+                })
+        return rows
+
     def market_prices(self) -> list[Row]:
         """Pour chaque produit demandé et chaque quartier : demande, offre, prix bas, plafond, coût d'achat."""
         from .pricing import EVENT_TYPES
@@ -1162,6 +1246,7 @@ class Save:
             "employee_demands": self.employee_demands(),
             "salary_negotiations": self.salary_negotiations(),
             "negotiation_options": self.negotiation_options(),
+            "product_options": self.product_options(),
             "contacts": self.contacts(),
             "messages": self.messages(),
             "manager_plans": self.manager_plans(),

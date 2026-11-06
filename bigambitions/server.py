@@ -252,6 +252,11 @@ def create_app(db_path: Path = DEFAULT_DB, root: Path = SAVE_ROOT, watch: bool =
             raise HTTPException(404, f"unknown business {address}")
         return detail
 
+    @app.get("/api/portfolio")
+    def portfolio_view(window: int = 14):
+        from . import portfolio
+        return read(portfolio.compute, clamp(window))
+
     @app.get("/api/recommendations")
     def recommendation_list(window: int = 7):
         return read(queries.recommendation_list, clamp(window))
