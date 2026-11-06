@@ -14,7 +14,7 @@ from statistics import median
 from typing import Any
 
 from . import recommendations
-from .recommendations import Data, _all, _tables
+from .recommendations import CONFIDENCE_WEIGHT, Data, _all, _tables
 
 LIKELY = ("high", "medium")
 LOW_EARNER = 0.25  # part du profit médian sous laquelle un commerce rapporte peu
@@ -127,6 +127,89 @@ def _product_verdict(c: dict[str, Any]) -> tuple[str, str]:
     return "keep", ""
 
 
+def _check(label: str, done: bool) -> dict[str, Any]:
+    return {"label": label, "done": done}
+
+
+def focus(d: Data, recos: list[dict[str, Any]], prods: dict[str, Any]) -> list[dict[str, Any]]:
+    """Actions chiffrées avec ce qu'il faut réellement faire, déduit de la sauvegarde (le temps du joueur ne se mesure
+    pas : on montre les étapes déjà prêtes et celles qui restent)."""
+    db = d.db
+    tables = _tables(db)
+    staff = defaultdict(int)
+    for e in d.employees:
+        if e["mainSkill"] != "cleaning":
+            staff[e["address"]] += 1
+    fits = defaultdict(int)
+    if "candidate_fits" in tables:
+        for f in _all(db, "SELECT address, count(*) AS n FROM candidate_fits GROUP BY address"):
+            fits[f["address"]] = f["n"]
+    by_skill = defaultdict(int)
+    if "candidates" in tables:
+        for c in _all(db, "SELECT mainSkill, count(*) AS n FROM candidates GROUP BY mainSkill"):
+            by_skill[c["mainSkill"]] = c["n"]
+    imported = {r["item"] for r in _all(db, "SELECT item FROM import_partnerships WHERE amountPerDelivery > 0")}         if "import_partnerships" in tables else set()
+    contracts = bool(imported)
+    supplied = {r["destinationAddress"] for r in _all(db, "SELECT DISTINCT destinationAddress FROM logistics_targets")}         if "logistics_targets" in tables else set()
+    plans = {p["address"]: p for p in d.plans}
+
+    actions = []
+    for r in recos:
+        if not r["gainPerDay"] or r.get("dismissed"):
+            continue
+        a, cat, ev = r.get("address"), r["category"], r.get("evidence") or {}
+        checks: list[dict[str, Any]] = []
+        if cat == "planning" and a in plans:
+            need, have = plans[a]["employees"] or 0, staff.get(a, 0)
+            if need > have:
+                checks.append(_check(f"Recruit {need - have} employee(s) ({fits.get(a, 0)} matching candidate(s) now)", False))
+            else:
+                checks.append(_check(f"Enough staff ({have} for {need})" + (f": {have - need} could go" if have > need else ""), True))
+            checks.append(_check("Set the opening hours and shifts", False))
+            if any("Marketing:" in x for x in r["steps"]):
+                checks.append(_check("Change the marketing campaigns", False))
+        elif cat == "markets" and ev.get("businessType"):
+            checks.append(_check(f"Rent {ev['space']}", False) if ev.get("space")
+                          else _check("No free building of the right type yet", False))
+            pool = sum(by_skill.get(sk, 0) for sk in ev.get("skills") or [])
+            checks.append(_check(f"Hire ≈{ev.get('desks')} employees ({pool} candidate(s) with the skill now)", False))
+            checks.append(_check("Furnish it like your others (desks, decor)", False))
+            checks.append(_check("Same product, no supply to set up", True))
+        elif cat == "markets":
+            checks.append(_check("Close the business and move its staff", False))
+        elif cat == "pricing":
+            checks.append(_check("Change one price", False))
+        elif cat == "marketing":
+            checks.append(_check("Change the marketing campaigns", False))
+        elif cat == "employees":
+            checks.append(_check("Adjust a few shifts", False))
+        elif cat == "competition":
+            checks.append(_check("Buy out or defeat the rival's shop(s)", False))
+        else:
+            checks = [_check(x, False) for x in r["steps"][:3]]
+        actions.append({"key": r["key"], "kind": cat, "address": a, "business": r["business"], "title": r["title"],
+                        "gainPerDay": r["gainPerDay"], "confidence": r["confidence"], "checks": checks})
+
+    for address, pr in prods.items():
+        name = (d.businesses.get(address) or {}).get("name")
+        for c in pr["candidates"]:
+            checks = [
+                _check(f"{c['equipmentOwned']} already there (if it has room)", True) if c["equipmentOwned"]
+                else _check(f"Buy a {c['equipment']} (${c['equipmentCost']:,.0f})" if c["equipment"] else "Find a shelf for it", False),
+                _check("Already imported: raise the order", True) if c["item"] in imported
+                else _check("Add it to your import contract" if contracts else "Set up an import contract and a purchasing agent", False),
+                _check("Logistics manager already supplies this shop: add a stock target", True) if address in supplied
+                else _check("Set up logistics for this shop", False),
+            ]
+            actions.append({"key": f"add|{address}|{c['item']}", "kind": "product", "address": address, "business": name,
+                            "title": f"Sell {c['itemLabel']}", "gainPerDay": c["marginPerDay"], "confidence": "medium",
+                            "checks": checks})
+    for a in actions:
+        a["todo"] = sum(1 for c in a["checks"] if not c["done"])
+        a["rank"] = a["gainPerDay"] * CONFIDENCE_WEIGHT[a["confidence"]]
+    return sorted(actions, key=lambda a: -a["rank"])
+
+
 def compute(db: sqlite3.Connection, window: int = 14) -> dict[str, Any]:
     d = Data(db, window)
     if not d.ok:
@@ -177,6 +260,7 @@ def compute(db: sqlite3.Connection, window: int = 14) -> dict[str, Any]:
         "window": window, "firstDay": d.first_day, "lastDay": d.last_day, "typicalProfitPerDay": round(typical, 2),
         "businesses": sorted(rows, key=lambda r: -r["profitPerDay"]),
         "products": prods,
+        "actions": focus(d, recos, prods),
         "summary": {
             "profitPerDay": round(total, 2),
             "likelyGainPerDay": round(sum(r["likelyGainPerDay"] for r in rows), 2),

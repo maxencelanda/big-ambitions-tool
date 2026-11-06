@@ -331,7 +331,10 @@ def provider_counts(d: Data) -> list[dict]:
                     f"the combined demand goes from {total(n):.0f} to {total(n + 1):.0f} (demand never falls below ≈30 per business): "
                     f"≈{extra_customers:.0f} more customers a day at ${revenue_per_customer:,.0f} each, minus desks "
                     f"(${staff_cost:,.0f}), rent (${rent:,.0f}), marketing (${marketing:,.0f}) and cleaning (${cleaning:,.0f}).{note}",
-                    gain, "low", "high", demandNow=total(n), demandAfter=total(n + 1)))
+                    gain, "low", "high", demandNow=total(n), demandAfter=total(n + 1), businessType=business_type,
+                    neighborhood=neighborhood, space=space["address"] if space else None,
+                    desks=math.ceil(extra_customers * SAFETY_MARGIN / 8),
+                    skills=sorted({e["mainSkill"] for e in desk_staff if e["mainSkill"]})))
     return out
 
 

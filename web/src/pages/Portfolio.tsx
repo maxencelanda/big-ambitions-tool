@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, CandidateProduct, CurrentProduct, Portfolio as PortfolioData, PortfolioBusiness } from "../api";
+import { api, CandidateProduct, FocusAction, CurrentProduct, Portfolio as PortfolioData, PortfolioBusiness } from "../api";
 import { businessLink } from "../components/BusinessTables";
 import { baseOption, Chart, useThemeColors } from "../components/Chart";
 import { Column, SortableTable } from "../components/SortableTable";
@@ -65,6 +65,82 @@ function Businesses({ data }: { data: PortfolioData }) {
         Hover “Within reach” for the levers; uncertain ideas (low confidence) are left out of it.
       </p>
       <SortableTable rows={data.businesses} columns={columns} rowKey={(b) => b.address} initialSort="profitPerDay" />
+    </div>
+  );
+}
+
+const THRESHOLDS = [0.01, 0.02, 0.03, 0.05];
+
+function useThreshold(): [number, (v: number) => void] {
+  const [v, setV] = useState(() => {
+    try { return Number(localStorage.getItem("attentionThreshold")) || 0.02; } catch { return 0.02; }
+  });
+  const set = (x: number) => { setV(x); try { localStorage.setItem("attentionThreshold", String(x)); } catch { /* non mémorisé */ } };
+  return [v, set];
+}
+
+function Action({ a }: { a: FocusAction }) {
+  return (
+    <li className="focus-item">
+      <div className="focus-head">
+        <b className="pos">+{money(a.gainPerDay)}/day</b>
+        <span>{a.title}{a.address && a.business ? <> · {businessLink({ address: a.address, name: a.business })}</> : null}</span>
+        <span className="muted">{a.todo === 0 ? "ready" : `${a.todo} step${a.todo > 1 ? "s" : ""} to do`}</span>
+      </div>
+      <ul className="checks">
+        {a.checks.map((c, i) => <li key={i} className={c.done ? "done" : undefined}>{c.done ? "✓" : "○"} {c.label}</li>)}
+      </ul>
+    </li>
+  );
+}
+
+/** Ce qui mérite ton attention : actions au-dessus d'un seuil (part du profit total), avec les étapes réelles. */
+function Focus({ data }: { data: PortfolioData }) {
+  const [threshold, setThreshold] = useThreshold();
+  const [showAll, setShowAll] = useState(false);
+  const total = data.summary.profitPerDay;
+  const cut = total * threshold;
+  const worth = data.actions.filter((a) => a.gainPerDay >= cut);
+  const below = data.actions.filter((a) => a.gainPerDay < cut);
+  const sure = worth.filter((a) => a.confidence !== "low");
+  const unsure = worth.filter((a) => a.confidence === "low");
+  const small = data.businesses.filter((b) => (b.profitAfterOverheadPerDay ?? b.profitPerDay) < cut);
+  return (
+    <div className="card">
+      <h2>Focus</h2>
+      <div className="controls">
+        <label>Attention threshold
+          <select value={threshold} onChange={(e) => setThreshold(Number(e.target.value))}>
+            {THRESHOLDS.map((t) => <option key={t} value={t}>{t * 100} % of profit</option>)}
+          </select>
+        </label>
+        <span className="muted">= {money(cut)}/day: anything worth less is left out, however profitable.</span>
+      </div>
+      <h3>Do these</h3>
+      {sure.length ? <ul className="focus">{sure.map((a) => <Action key={a.key} a={a} />)}</ul>
+        : <p className="muted">No reliable action above the threshold.</p>}
+      {unsure.length > 0 && (
+        <>
+          <h3 className="section">Worth checking first</h3>
+          <p className="hint">Bigger but uncertain: simplified models (new businesses, retail hours, monopolies). Check demand and staff before acting.</p>
+          <ul className="focus">{unsure.map((a) => <Action key={a.key} a={a} />)}</ul>
+        </>
+      )}
+      {small.length > 0 && (
+        <p className="hint">
+          <b>Below the threshold as a whole:</b> {small.map((b) => `${b.name} (${money(b.profitAfterOverheadPerDay ?? b.profitPerDay)}/day)`).join(", ")}.
+          Leave {small.length > 1 ? "them" : "it"} on autopilot, or close {small.length > 1 ? "them" : "it"} if {small.length > 1 ? "they take" : "it takes"} your attention:
+          you lose about {money(small.reduce((s, b) => s + b.profitPerDay, 0))}/day ({percent(small.reduce((s, b) => s + b.profitPerDay, 0) / total, 1)} of profit).
+        </p>
+      )}
+      {below.length > 0 && (
+        <>
+          <button className="btn" onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Hide" : "Show"} {below.length} smaller action(s) (+{money(below.reduce((s, a) => s + a.gainPerDay, 0))}/day in all)
+          </button>
+          {showAll && <ul className="focus muted-list">{below.map((a) => <Action key={a.key} a={a} />)}</ul>}
+        </>
+      )}
     </div>
   );
 }
@@ -264,6 +340,7 @@ export function Portfolio() {
         <Tile label="Invested" value={money(s.capital)} sub="furniture and equipment" />
         <Tile label="To review" value={String(review.length)} sub={review.length ? review.map((b) => b.name).join(", ") : "every business pulls its weight"} />
       </div>
+      <div className="section"><Focus data={data} /></div>
       <div className="section"><Ranking data={data} /></div>
       <div className="section"><Businesses data={data} /></div>
       <div className="section"><Products data={data} /></div>

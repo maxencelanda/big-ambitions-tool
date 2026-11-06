@@ -307,7 +307,12 @@ export type CurrentProduct = ProductBase & { revenuePerDay: number; importCost: 
   manualRestock: boolean; consumed: boolean; imported: boolean; share: number | null; verdict: string; reason: string };
 export type CandidateProduct = ProductBase & { source: string; unitMargin: number;
   equipmentOwned: string | null; equipment: string | null; equipmentCost: number | null };
+export type FocusAction = {
+  key: string; kind: string; address: string | null; business: string | null; title: string; gainPerDay: number;
+  confidence: string; checks: { label: string; done: boolean }[]; todo: number; rank: number;
+};
 export type Portfolio = {
+  actions: FocusAction[];
   empty?: boolean; window: number; firstDay: number; lastDay: number; typicalProfitPerDay: number;
   businesses: PortfolioBusiness[];
   products: Record<string, { calibration: number; customersPerDay: number; current: CurrentProduct[]; candidates: CandidateProduct[] }>;
