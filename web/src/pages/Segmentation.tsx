@@ -128,8 +128,10 @@ function Actions({ data }: { data: SegData }) {
   const columns: Column<ActionRow>[] = [
     { key: "business", label: "Business", value: (r) => r.business.name, render: (r) => businessLink(r.business) },
     { key: "label", label: "Lever" },
-    { key: "value", label: "Yours", num: true, render: (r) => fmt(r.key, r.value) },
-    { key: "peerValue", label: "Better peers", num: true, title: "Median of the more profitable businesses with the same model", render: (r) => fmt(r.key, r.peerValue) },
+    { key: "value", label: "Yours", num: true, title: "Current value over the window; in $ per day for spending ratios (idle: wages paid for idle hours)",
+      render: (r) => <>{fmt(r.key, r.value)}{r.amount != null && <span className="muted"> · {money(r.amount)}/day</span>}</> },
+    { key: "peerValue", label: "Better peers", num: true, title: "Median of the more profitable businesses with the same model, applied to your revenue",
+      render: (r) => <>{fmt(r.key, r.peerValue)}{r.peerAmount != null && <span className="muted"> · {money(r.peerAmount)}/day</span>}</> },
     { key: "gapSd", label: "Gap", num: true, title: "In standard deviations, after centering by business model", render: (r) => r.gapSd.toFixed(1) },
     { key: "gainPerDay", label: "Gain", num: true, title: "If this lever matched your better peers, revenue unchanged", render: (r) => (r.gainPerDay ? `+${money(r.gainPerDay)}/day` : "") },
     { key: "action", label: "Action", render: (r) => <span className="muted">{r.action}</span> },

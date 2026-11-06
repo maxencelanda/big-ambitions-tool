@@ -401,12 +401,17 @@ def _business(r: dict[str, Any], model: Model, z: np.ndarray, scores: np.ndarray
             value, target = r[key], float(np.median(values))
             if (value - target) * direction >= 0:  # l'écart moyen vient d'un pair atypique : pas d'action
                 continue
-            gain = None
+            gain = amount = peer_amount = None
             if key in ("payrollRatio", "cogsRatio", "marketingRatio"):
-                gain = (value - target) * r["revenueRaw"]
+                # Montants par jour : ce que le commerce dépense aujourd'hui et ce que dépenseraient ses meilleurs pairs.
+                amount, peer_amount = value * r["revenueRaw"], target * r["revenueRaw"]
+                gain = amount - peer_amount
             elif key == "idleShare" and value:
-                gain = r["idleWagesPerDay"] * (value - target) / value
+                amount, peer_amount = r["idleWagesPerDay"], r["idleWagesPerDay"] * target / value
+                gain = amount - peer_amount
             gaps.append({"key": key, "label": label, "value": round(value, 4), "peerValue": round(target, 4),
+                         "amount": round(amount, 2) if amount is not None else None,
+                         "peerAmount": round(peer_amount, 2) if peer_amount is not None else None,
                          "gapSd": round(float(gap), 2), "gainPerDay": round(gain, 2) if gain else None,
                          "action": ACTIONS[key].format(v=_fmt(key, value), b=_fmt(key, target))})
         gaps.sort(key=lambda g: (-(g["gainPerDay"] or 0), g["gapSd"]))

@@ -257,7 +257,7 @@ export type Supplier = {
   purchasePriceEstimate: number | null; maxOrder: number | null;
 };
 
-export type SegGap = { key: string; label: string; value: number; peerValue: number; gapSd: number; gainPerDay: number | null; action: string };
+export type SegGap = { key: string; label: string; value: number; peerValue: number; amount: number | null; peerAmount: number | null; gapSd: number; gainPerDay: number | null; action: string };
 export type SegBusiness = {
   address: string; name: string; typeLabel: string; segment: string; model: string; modelLabel: string; group: number;
   supplementary: boolean; creationDay: number | null; silhouette: number | null; performance: number; peers: string[];
